@@ -38,6 +38,7 @@ const HOTKEY_LABELS: Record<string, string> = {
   "action.client": "Client",
   "action.gift": "Offert",
   "action.close": "Fermer",
+  "action.packCycle": "Vente par Pack",
 };
 
 const ALL_TOGGLE_ACTIONS: { key: string; label: string }[] = [
@@ -59,6 +60,7 @@ const ALL_TOGGLE_ACTIONS: { key: string; label: string }[] = [
   { key: "action.lang", label: "Langue" },
   { key: "action.treasury", label: "Trésorerie" },
   { key: "action.client", label: "Client" },
+  { key: "action.packCycle", label: "Vente par Pack" },
 ];
 
 const MIN_VISIBLE_ACTIONS = 6;
