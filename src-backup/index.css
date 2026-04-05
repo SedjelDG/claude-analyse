@@ -1,0 +1,59 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@100;200;300;400;500;600;700&family=Inter:wght@100;200;300;400;500;600;700;800;900&family=Outfit:wght@100;200;300;400;500;600;700;800;900&family=Rubik:wght@300;400;500;600;700;800;900&display=swap');
+
+:root {
+  --font-family-display: "Outfit", "IBM Plex Sans Arabic", sans-serif;
+  --font-family-body: "Inter", "IBM Plex Sans Arabic", sans-serif;
+  
+  --color-primary: #3b82f6;
+  --color-secondary: #10b981;
+  --color-accent: #f59e0b;
+  --color-danger: #ef4444;
+  --color-surface: #ffffff;
+  --color-background: #f8fafc;
+}
+
+@theme {
+  --color-primary: var(--color-primary);
+  --color-secondary: var(--color-secondary);
+  --color-accent: var(--color-accent);
+  --color-danger: var(--color-danger);
+  --color-surface: var(--color-surface);
+  --color-background: var(--color-background);
+  
+  --font-display: var(--font-family-display);
+  --font-body: var(--font-family-body);
+  --font-arabic: "IBM Plex Sans Arabic", sans-serif;
+}
+
+@layer base {
+  body {
+    @apply bg-background text-slate-900 font-body antialiased transition-all duration-300;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display font-black tracking-tight;
+  }
+
+  /* RTL Adjustments */
+  [dir="rtl"] {
+    @apply font-arabic;
+  }
+}
+
+@layer components {
+  .glass-dock {
+    @apply bg-white/80 backdrop-blur-xl border border-white/50 shadow-2xl rounded-[2.5rem];
+  }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-slate-200 rounded-full hover:bg-slate-300 transition-colors;
+}
