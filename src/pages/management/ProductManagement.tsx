@@ -485,6 +485,49 @@ const ProductManagement = () => {
                   </div>
                 )}
               </div>
+
+              {/* Stock Movements Log */}
+              <div className="pos-card overflow-hidden">
+                <div className="px-4 py-3 border-b border-border">
+                  <h3 className="font-semibold text-foreground">Mouvements de stock récents</h3>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">Historique des entrées, sorties et ajustements</p>
+                </div>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="pos-table-header">
+                      <th className="px-3 py-2.5 text-left text-xs font-semibold">Date</th>
+                      <th className="px-3 py-2.5 text-left text-xs font-semibold">Produit</th>
+                      <th className="px-3 py-2.5 text-left text-xs font-semibold">Type</th>
+                      <th className="px-3 py-2.5 text-left text-xs font-semibold">Quantité</th>
+                      <th className="px-3 py-2.5 text-left text-xs font-semibold">Raison</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {mockMovements.map((m) => (
+                      <tr key={m.id} className="hover:bg-muted/50">
+                        <td className="px-3 py-2 text-muted-foreground">{m.date}</td>
+                        <td className="px-3 py-2 font-medium text-foreground">{m.product}</td>
+                        <td className="px-3 py-2">
+                          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                            m.type === "in" ? "bg-success/10 text-success" : m.type === "out" ? "bg-accent/10 text-accent" : "bg-info/10 text-info"
+                          }`}>
+                            {m.type === "in" ? "Entrée" : m.type === "out" ? "Sortie" : "Ajustement"}
+                          </span>
+                        </td>
+                        <td className={`px-3 py-2 font-semibold ${
+                          m.type === "in" ? "text-success" : m.type === "out" ? "text-accent" : "text-info"
+                        }`}>
+                          {m.type === "in" ? "+" : ""}{m.quantity}
+                        </td>
+                        <td className="px-3 py-2 text-muted-foreground">{m.reason}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div className="px-4 py-2 border-t border-border text-[10px] text-muted-foreground italic">
+                  Les mouvements seront automatiquement enregistrés une fois le backend connecté.
+                </div>
+              </div>
             </div>
           )}
         </motion.div>
