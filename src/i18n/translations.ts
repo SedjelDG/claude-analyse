@@ -200,6 +200,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     "action.close": "CLOSE",
     "action.stop": "STOP",
     "action.lang": "FR — EN",
+    "action.packCycle": "PACK CYCLE",
 
     // Labels
     "label.totalHT": "SUBTOTAL",
