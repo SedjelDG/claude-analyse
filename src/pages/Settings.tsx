@@ -176,11 +176,22 @@ const Settings = () => {
 
         {/* Layout */}
         <motion.div {...anim(sectionIdx++)} className="pos-card p-5">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="p-2 rounded-lg bg-primary/10 text-primary"><Monitor className="h-5 w-5" /></div>
-            <div>
-              <h3 className="font-semibold text-foreground">Disposition</h3>
-              <p className="text-xs text-muted-foreground">Choisir le mode d'affichage adapté à votre écran</p>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-primary/10 text-primary"><Monitor className="h-5 w-5" /></div>
+              <div>
+                <h3 className="font-semibold text-foreground">Disposition</h3>
+                <p className="text-xs text-muted-foreground">Choisir le mode d'affichage adapté à votre écran</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted/50 border border-border">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                {settings.language === "ar" ? "قفل" : "Lock"}
+              </span>
+              <Switch
+                checked={settings.lockRegisterPanels}
+                onCheckedChange={(c) => updateSettings({ lockRegisterPanels: c })}
+              />
             </div>
           </div>
           <div className="flex gap-3">
@@ -190,6 +201,11 @@ const Settings = () => {
               </button>
             ))}
           </div>
+          <p className="mt-3 text-[10px] text-muted-foreground italic">
+            {settings.language === "ar" 
+              ? "يمكنك قفل أبعاد القوائم الجانبية لتجنب تغييرها بالخطأ."
+              : "Vous pouvez verrouiller les dimensions des panneaux latéraux pour éviter de les modifier par erreur."}
+          </p>
         </motion.div>
 
         {/* Action Button Visibility — only when logged in */}

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -6,7 +6,7 @@ import {
   CreditCard, Pause, Hash, Wallet, DoorOpen, PiggyBank, User,
   Gift, X, Power, Clock, CalendarDays, Barcode,
   Banknote, CreditCard as CardIcon, Settings, LogOut, Globe,
-  PackageOpen
+  PackageOpen, Shield, Play
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useTranslation } from "@/hooks/useTranslation";
@@ -257,7 +257,7 @@ const Register = () => {
         if (key && actions[key]) { e.preventDefault(); actions[key](); return; }
       }
       if (!searchOpen && !quantityDialog && !discountDialog && !paymentDialog && !cashDialog &&
-          e.key.length === 1 && /[a-zA-Z0-9]/.test(e.key) && !e.ctrlKey && !e.altKey) {
+        e.key.length === 1 && /[a-zA-Z0-9]/.test(e.key) && !e.ctrlKey && !e.altKey) {
         setSearchOpen(true);
       }
     };
@@ -325,10 +325,153 @@ const Register = () => {
     }
   };
 
+  const getActionTheme = (actionKey: string) => {
+    const themes: Record<string, { text: string; bg: string; border: string }> = {
+      "action.add": { text: "text-[#10b981]", bg: "bg-[#10b981]", border: "border-[#10b981]/40" },
+      "action.deduct": { text: "text-[#ef4444]", bg: "bg-[#ef4444]", border: "border-[#ef4444]/40" },
+      "action.search": { text: "text-[#ec4899]", bg: "bg-[#ec4899]", border: "border-[#ec4899]/40" },
+      "action.removeAll": { text: "text-[#991b1b]", bg: "bg-[#991b1b]", border: "border-[#991b1b]/40" },
+      "action.lock": { text: "text-[#4b5563]", bg: "bg-[#4b5563]", border: "border-[#4b5563]/40" },
+      "action.return": { text: "text-[#f43f5e]", bg: "bg-[#f43f5e]", border: "border-[#f43f5e]/40" },
+      "action.discount": { text: "text-[#f97316]", bg: "bg-[#f97316]", border: "border-[#f97316]/40" },
+      "action.quantity": { text: "text-[#0d9488]", bg: "bg-[#0d9488]", border: "border-[#0d9488]/40" },
+      "action.payment": { text: "text-[#eab308]", bg: "bg-[#eab308]", border: "border-[#eab308]/40" },
+      "action.hold": { text: "text-[#3b82f6]", bg: "bg-[#3b82f6]", border: "border-[#3b82f6]/40" },
+      "action.deposit": { text: "text-[#1e40af]", bg: "bg-[#1e40af]", border: "border-[#1e40af]/40" },
+      "action.drawer": { text: "text-[#7e22ce]", bg: "bg-[#7e22ce]", border: "border-[#7e22ce]/40" },
+      "action.treasury": { text: "text-[#1e293b]", bg: "bg-[#1e293b]", border: "border-[#1e293b]/40" },
+      "action.client": { text: "text-[#3730a3]", bg: "bg-[#3730a3]", border: "border-[#3730a3]/40" },
+      "action.gift": { text: "text-[#0ea5e9]", bg: "bg-[#0ea5e9]", border: "border-[#0ea5e9]/40" },
+      "action.close": { text: "text-[#b91c1c]", bg: "bg-[#b91c1c]", border: "border-[#b91c1c]/40" },
+      "action.stop": { text: "text-[#000000]", bg: "bg-[#000000]", border: "border-[#000000]/40" },
+      "action.packCycle": { text: "text-[#dc2626]", bg: "bg-[#dc2626]", border: "border-[#dc2626]/40" },
+    };
+    return themes[actionKey] || { text: "text-primary", bg: "bg-primary", border: "border-primary/40" };
+  };
+
   const getBadgeColor = (index: number) => {
     const col = index % 3;
     return col === 0 ? "bg-accent text-accent-foreground" : col === 1 ? "bg-success text-success-foreground" : "bg-info text-info-foreground";
   };
+
+  // ── Resizable left panel ────────────────────────────────────────────────
+  const LEFT_PANEL_MIN = 160;
+  const LEFT_PANEL_MAX = 400;
+  const LEFT_PANEL_DEFAULT = 240;
+  const LEFT_PANEL_STORAGE_KEY = "register_left_panel_width";
+
+  const [leftPanelWidth, setLeftPanelWidth] = useState<number>(() => {
+    try {
+      const stored = localStorage.getItem(LEFT_PANEL_STORAGE_KEY);
+      if (stored) {
+        const n = Number(stored);
+        if (n >= LEFT_PANEL_MIN && n <= LEFT_PANEL_MAX) return n;
+      }
+    } catch { /* ignore */ }
+    return LEFT_PANEL_DEFAULT;
+  });
+
+  // ── Resizable right panel ────────────────────────────────────────────────
+  const PANEL_MIN = 160;
+  const PANEL_MAX = 600;
+  const PANEL_DEFAULT = 260;
+  const PANEL_STORAGE_KEY = "register_hotkey_panel_width";
+
+  const [panelWidth, setPanelWidth] = useState<number>(() => {
+    try {
+      const stored = localStorage.getItem(PANEL_STORAGE_KEY);
+      if (stored) {
+        const n = Number(stored);
+        if (n >= PANEL_MIN && n <= PANEL_MAX) return n;
+      }
+    } catch { /* ignore */ }
+    return PANEL_DEFAULT;
+  });
+
+  const isDragging = useRef<"left" | "right" | null>(null);
+  const dragStartX = useRef(0);
+  const dragStartWidth = useRef(0);
+  const rafId = useRef<number>(0);
+
+  const handleLeftDividerMouseDown = useCallback((e: React.MouseEvent) => {
+    if (settings.lockRegisterPanels) return;
+    e.preventDefault();
+    isDragging.current = "left";
+    dragStartX.current = e.clientX;
+    dragStartWidth.current = leftPanelWidth;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  }, [leftPanelWidth, settings.lockRegisterPanels]);
+
+  const handleDividerMouseDown = useCallback((e: React.MouseEvent) => {
+    if (settings.lockRegisterPanels) return;
+    e.preventDefault();
+    isDragging.current = "right";
+    dragStartX.current = e.clientX;
+    dragStartWidth.current = panelWidth;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  }, [panelWidth, settings.lockRegisterPanels]);
+
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!isDragging.current) return;
+      cancelAnimationFrame(rafId.current);
+      rafId.current = requestAnimationFrame(() => {
+        if (isDragging.current === "right") {
+          // dragging left = right panel grows
+          const delta = dragStartX.current - e.clientX;
+          const next = Math.min(PANEL_MAX, Math.max(PANEL_MIN, dragStartWidth.current + delta));
+          setPanelWidth(next);
+        } else if (isDragging.current === "left") {
+          // dragging right = left panel grows
+          const delta = e.clientX - dragStartX.current;
+          const next = Math.min(LEFT_PANEL_MAX, Math.max(LEFT_PANEL_MIN, dragStartWidth.current + delta));
+          setLeftPanelWidth(next);
+        }
+      });
+    };
+    const onUp = () => {
+      if (!isDragging.current) return;
+      const type = isDragging.current;
+      isDragging.current = null;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      if (type === "right") {
+        setPanelWidth(w => { localStorage.setItem(PANEL_STORAGE_KEY, String(w)); return w; });
+      } else {
+        setLeftPanelWidth(w => { localStorage.setItem(LEFT_PANEL_STORAGE_KEY, String(w)); return w; });
+      }
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      cancelAnimationFrame(rafId.current);
+    };
+  }, []);
+
+  // Derive columns and scale from panel width — fully memoized
+  const { panelCols, btnScale, headerScale, leftPanelScale } = useMemo(() => {
+    let cols: number;
+    if (panelWidth < 210) cols = 1;
+    else if (panelWidth < 300) cols = 2;
+    else if (panelWidth < 550) cols = 3;
+    else if (panelWidth < 700) cols = 4;
+    else cols = 5;
+    // Baseline: 260px / 3 cols = ~87px per button = scale 1.0
+    const btnW = panelWidth / cols;
+    const bs = Math.min(1.45, Math.max(0.75, btnW / 87));
+
+    // Damped header scale: even more conservative now
+    const hs = Math.min(1.25, Math.max(0.85, 1 + (bs - 1) * 0.35));
+
+    // Left panel scale: baseline 240px
+    const lps = Math.min(1.3, Math.max(0.85, 1 + (leftPanelWidth / 240 - 1) * 0.4));
+
+    return { panelCols: cols, btnScale: bs, headerScale: hs, leftPanelScale: lps };
+  }, [panelWidth, leftPanelWidth]);
 
   return (
     <div className="h-screen flex bg-register-bg overflow-hidden select-none">
@@ -427,22 +570,89 @@ const Register = () => {
       </AnimatePresence>
 
       {/* LEFT PANEL */}
-      <div className="w-[240px] flex flex-col border-r border-register-border bg-card">
-        <div className="flex flex-col items-center py-3 border-b border-register-border bg-primary">
-          <motion.div className="flex items-center gap-0.5" initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.5, ease: "easeOut" }}>
-            <motion.span initial={{ x: -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ duration: 0.5, delay: 0.1 }} className="text-3xl font-black text-primary-foreground tracking-tight">D</motion.span>
-            <motion.span initial={{ x: 20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ duration: 0.5, delay: 0.25 }} className="text-3xl font-black text-primary-foreground tracking-tight">S</motion.span>
+      <div
+        className="flex flex-col border-r border-register-border bg-card overflow-hidden flex-shrink-0"
+        style={{ width: leftPanelWidth }}
+      >
+        <div
+          className="flex flex-col items-center border-b border-register-border bg-white flex-shrink-0 relative overflow-hidden"
+          style={{ paddingTop: Math.round(18 * leftPanelScale), paddingBottom: Math.round(18 * leftPanelScale) }}
+        >
+          {/* Subtle background glow */}
+          <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/5 blur-3xl rounded-full -translate-y-1/2 translate-x-1/2" />
+          
+          <motion.div
+            className="flex flex-col items-center leading-none"
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ duration: 0.5, ease: "easeOut" }}
+          >
+            <div className="flex items-center" style={{ gap: Math.round(2 * leftPanelScale) }}>
+              <motion.span
+                initial={{ x: -10, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                transition={{ duration: 0.5, delay: 0.1 }}
+                className="font-black tracking-tighter"
+                style={{ 
+                  fontSize: Math.round(48 * leftPanelScale),
+                  background: 'linear-gradient(to bottom right, #f97316, #06b6d4)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent'
+                }}
+              >
+                D
+              </motion.span>
+              <motion.span
+                initial={{ x: 10, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                transition={{ duration: 0.5, delay: 0.25 }}
+                className="font-black tracking-tighter"
+                style={{ 
+                  fontSize: Math.round(48 * leftPanelScale),
+                  background: 'linear-gradient(to bottom right, #f97316, #06b6d4)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent'
+                }}
+              >
+                S
+              </motion.span>
+            </div>
+            <div className="text-center px-1 overflow-hidden mt-1 px-4">
+              <p
+                className="font-bold tracking-[0.45em] uppercase"
+                style={{ 
+                  fontSize: Math.round(10.5 * leftPanelScale),
+                  background: 'linear-gradient(to right, #f97316, #06b6d4)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent'
+                }}
+              >
+                SOFTWARE
+              </p>
+            </div>
           </motion.div>
-          <p className="text-[9px] font-bold tracking-[0.3em] uppercase text-primary-foreground/80">{t("label.software")}</p>
-          <p className="text-[7px] tracking-[0.15em] uppercase text-primary-foreground/50">{t("label.managementSoftware")}</p>
         </div>
 
-        <div className="px-3 py-2 border-b border-register-border bg-muted">
-          <p className="text-[10px] font-bold text-foreground uppercase tracking-wide text-center">SUPÉRETTE ERRAHMA</p>
+        <div
+          className="border-b border-register-border bg-[#1e3a8a] flex-shrink-0 overflow-hidden"
+          style={{
+            paddingLeft: 12,
+            paddingRight: 12,
+            paddingTop: Math.round(12 * leftPanelScale),
+            paddingBottom: Math.round(12 * leftPanelScale),
+          }}
+        >
+          <p
+            className="font-bold text-white uppercase tracking-widest text-center truncate"
+            style={{ fontSize: Math.round(11 * leftPanelScale) }}
+          >
+            SUPÉRETTE ERRAHMA
+          </p>
         </div>
 
-        <div className="px-3 py-1.5 border-b border-register-border bg-primary">
-          <span className="text-[10px] font-bold text-primary-foreground uppercase tracking-wider">{t("label.shortcuts")}</span>
+        <div className="px-4 py-2 border-b border-gray-50 bg-white flex items-center gap-2">
+          <Shield className="w-3.5 h-3.5 text-[#f97316] fill-[#f97316]/5" />
+          <span className="text-[10.5px] font-bold text-[#f97316] uppercase tracking-widest">{t("label.shortcuts")}</span>
         </div>
 
         <div className="flex-1 overflow-auto">
@@ -454,26 +664,38 @@ const Register = () => {
           ))}
         </div>
 
-        <div className="border-t border-register-border flex">
-          <button onClick={() => navigate("/settings", { state: { from: "/register" } })} className="flex items-center gap-2 flex-1 px-3 py-2 text-[11px] font-medium text-muted-foreground hover:bg-muted transition-colors border-r border-register-border">
-            <Settings className="h-3.5 w-3.5" />
-            {t("label.settings")}
+        <div className="border-t border-register-border flex flex-shrink-0 overflow-hidden">
+          <button onClick={() => navigate("/settings", { state: { from: "/register" } })} className="flex items-center gap-2 justify-center flex-1 px-1 py-2 text-[11px] font-medium text-muted-foreground hover:bg-muted transition-colors border-r border-register-border min-w-0">
+            <Settings className="h-3.5 w-3.5 flex-shrink-0" />
+            <span className="truncate">{t("label.settings")}</span>
           </button>
-          <button onClick={() => { if (!isOpenMode()) logout(); navigate("/"); }} className="flex items-center gap-2 flex-1 px-3 py-2 text-[11px] font-medium text-accent hover:bg-muted transition-colors">
-            <LogOut className="h-3.5 w-3.5" />
-            {t("label.back")}
+          <button onClick={() => { if (!isOpenMode()) logout(); navigate("/"); }} className="flex items-center gap-2 justify-center flex-1 px-1 py-2 text-[11px] font-medium text-accent hover:bg-muted transition-colors min-w-0">
+            <LogOut className="h-3.5 w-3.5 flex-shrink-0" />
+            <span className="truncate">{t("label.back")}</span>
           </button>
         </div>
       </div>
 
+      {/* LEFT RESIZE DIVIDER */}
+      <div
+        onMouseDown={handleLeftDividerMouseDown}
+        className={`w-[5px] flex-shrink-0 relative group z-10 ${settings.lockRegisterPanels ? "cursor-default" : "cursor-col-resize"}`}
+        style={{ background: "transparent" }}
+      >
+        <div
+          className={`absolute inset-y-0 left-1/2 -translate-x-1/2 w-[3px] transition-all duration-150
+            bg-register-border ${!settings.lockRegisterPanels ? "group-hover:bg-primary group-hover:w-[4px] group-active:bg-primary" : "opacity-30"}`}
+        />
+      </div>
+
       {/* CENTER PANEL */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="bg-card border-b border-register-border px-4 py-3 flex items-center justify-center">
+        <div className="bg-card border-b border-register-border px-4 py-8 flex items-center justify-center">
           <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.4 }} className="text-center">
-            <motion.span key={totalTTC} initial={{ scale: 1.05, opacity: 0.7 }} animate={{ scale: 1, opacity: 1 }} className="text-5xl font-black text-primary tracking-tight">
+            <motion.span key={totalTTC} initial={{ scale: 1.05, opacity: 0.7 }} animate={{ scale: 1, opacity: 1 }} className="text-8xl font-black text-primary tracking-tighter">
               {totalTTC.toFixed(2).replace(".", ",")}
             </motion.span>
-            <span className="text-2xl font-black text-primary ml-2">DA</span>
+            <span className="text-3xl font-black text-primary/40 ml-3">DA</span>
           </motion.div>
         </div>
 
@@ -499,9 +721,8 @@ const Register = () => {
             <button
               key={n}
               onClick={() => { setActiveClient(n); setSelectedItemId(null); }}
-              className={`flex-1 text-[10px] font-bold uppercase transition-all border-r border-register-border last:border-r-0 relative ${
-                activeClient === n ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted/80"
-              }`}
+              className={`flex-1 text-[10px] font-bold uppercase transition-all border-r border-register-border last:border-r-0 relative ${activeClient === n ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted/80"
+                }`}
             >
               {t("label.client")}{n}
               {(clientCarts[n]?.length || 0) > 0 && activeClient !== n && (
@@ -529,9 +750,8 @@ const Register = () => {
                 {cart.map((item, i) => (
                   <motion.tr key={item.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10, height: 0 }} transition={{ duration: 0.2, delay: i * 0.03 }}
                     onClick={() => setSelectedItemId(item.id === selectedItemId ? null : item.id)}
-                    className={`cursor-pointer transition-colors border-b border-register-border ${
-                      item.id === selectedItemId ? "bg-primary/10 border-l-2 border-l-primary" : i % 2 === 0 ? "bg-card hover:bg-muted/40" : "bg-muted/20 hover:bg-muted/40"
-                    }`}
+                    className={`cursor-pointer transition-colors border-b border-register-border ${item.id === selectedItemId ? "bg-primary/10 border-l-2 border-l-primary" : i % 2 === 0 ? "bg-card hover:bg-muted/40" : "bg-muted/20 hover:bg-muted/40"
+                      }`}
                   >
                     <td className="px-3 py-2.5 text-[12px] font-medium text-foreground">
                       <div className="flex items-center gap-2">
@@ -565,51 +785,147 @@ const Register = () => {
         </div>
       </div>
 
-      {/* RIGHT PANEL — Redesigned buttons */}
-      <div className="w-[260px] flex flex-col border-l border-register-border bg-card">
-        <div className="px-3 py-2 border-b border-register-border bg-primary text-primary-foreground">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <User className="h-3.5 w-3.5" />
-              <span className="text-[11px] font-bold uppercase">{activeUser.name}</span>
+      {/* RIGHT RESIZE DIVIDER */}
+      <div
+        onMouseDown={handleDividerMouseDown}
+        className={`w-[5px] flex-shrink-0 relative group z-10 ${settings.lockRegisterPanels ? "cursor-default" : "cursor-col-resize"}`}
+        style={{ background: "transparent" }}
+      >
+        <div
+          className={`absolute inset-y-0 left-1/2 -translate-x-1/2 w-[3px] transition-all duration-150
+            bg-register-border ${!settings.lockRegisterPanels ? "group-hover:bg-primary group-hover:w-[4px] group-active:bg-primary" : "opacity-30"}`}
+        />
+      </div>
+
+      {/* RIGHT PANEL — resizable hotkey buttons */}
+      <div
+        className="flex flex-col border-l border-register-border bg-card overflow-hidden flex-shrink-0"
+        style={{ width: panelWidth }}
+      >
+        <div className="flex flex-col bg-white border-b border-register-border flex-shrink-0 items-center justify-center relative overflow-hidden" style={{ padding: Math.round(12 * headerScale) }}>
+          {/* Subtle background glow */}
+          <div className="absolute top-0 left-0 w-24 h-24 bg-orange-500/5 blur-3xl rounded-full -translate-y-1/2 -translate-x-1/2" />
+
+          <div className="flex flex-col items-center mb-2">
+            <div
+              className="rounded-full border-2 border-[#f97316] flex items-center justify-center text-[#f97316] mb-1 bg-white shadow-sm"
+              style={{ 
+                width: Math.round(42 * headerScale), 
+                height: Math.round(42 * headerScale) 
+              }}
+            >
+              <User style={{ width: Math.round(22 * headerScale), height: Math.round(22 * headerScale) }} />
             </div>
-            <div className="flex items-center gap-2 text-[10px]">
-              <span className="flex items-center gap-1"><CalendarDays className="h-3 w-3" />{dateStr}</span>
-              <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{timeStr}</span>
+            <span
+              className="font-black uppercase text-[#f97316] tracking-tight"
+              style={{ fontSize: Math.round(18 * headerScale) }}
+            >
+              {activeUser.name}
+            </span>
+          </div>
+          <div className="flex items-center justify-center" style={{ gap: Math.round(16 * headerScale) }}>
+            <div className="flex items-center" style={{ gap: Math.round(6 * headerScale) }}>
+              <div
+                className="rounded-full border border-[#f97316]/30 flex items-center justify-center text-[#f97316]"
+                style={{ padding: Math.round(3.5 * headerScale) }}
+              >
+                <CalendarDays style={{ width: Math.round(10 * headerScale), height: Math.round(10 * headerScale) }} />
+              </div>
+              <span className="font-bold text-[#f97316]/90" style={{ fontSize: Math.round(12 * headerScale) }}>{dateStr}</span>
+            </div>
+            <div className="flex items-center" style={{ gap: Math.round(6 * headerScale) }}>
+              <div
+                className="rounded-full border border-[#f97316]/30 flex items-center justify-center text-[#f97316]"
+                style={{ padding: Math.round(3.5 * headerScale) }}
+              >
+                <Clock style={{ width: Math.round(10 * headerScale), height: Math.round(10 * headerScale) }} />
+              </div>
+              <span className="font-bold text-[#f97316]/90" style={{ fontSize: Math.round(12 * headerScale) }}>{timeStr}</span>
             </div>
           </div>
-          <p className="text-[9px] text-primary-foreground/60 mt-0.5">{t("label.registerReady")}</p>
         </div>
 
+        {/* Button grid — reflows instantly as panelWidth changes */}
         <div className="flex-1 overflow-auto p-1.5">
-          <div className="grid grid-cols-3 gap-1">
-            {visibleButtons.map((btn, i) => {
-              const shortcut = userHotkeys[btn.key] || "";
+          {(() => {
+            // Build rows so the last row can be centered if it's partial
+            const rows: typeof visibleButtons[] = [];
+            for (let i = 0; i < visibleButtons.length; i += panelCols) {
+              rows.push(visibleButtons.slice(i, i + panelCols));
+            }
+            return rows.map((row, rowIdx) => {
+              const isFull = row.length === panelCols;
+              // Calculate explicit width for each button to ensure orphans don't expand
+              // 12px for p-1.5 (6px each side), 4px for gap-1
+              const totalGapWidth = (panelCols - 1) * 4;
+              const btnWidth = Math.floor((panelWidth - 12 - totalGapWidth) / panelCols);
+
               return (
-                <button
-                  key={btn.key}
-                  onClick={() => actions[btn.key]?.()}
-                  className="flex flex-col items-center justify-between bg-card border border-register-border transition-all active:scale-95 hover:bg-muted/50 min-h-[72px] overflow-hidden"
+                <div
+                  key={rowIdx}
+                  className="flex gap-1 mb-1"
+                  style={{ justifyContent: isFull ? "stretch" : "center" }}
                 >
-                  <div className="flex flex-col items-center justify-center gap-0.5 flex-1 p-1.5">
-                    <btn.icon className="h-4 w-4 text-foreground" />
-                    <span className="text-[7px] font-bold uppercase leading-tight text-center text-foreground">
-                      {t(btn.key)}
-                    </span>
-                  </div>
-                  {shortcut ? (
-                    <span className={`text-[7px] font-bold py-0.5 w-full text-center ${getBadgeColor(i)}`}>
-                      {shortcut}
-                    </span>
-                  ) : (
-                    <span className="text-[7px] font-bold py-0.5 w-full text-center bg-muted text-muted-foreground">
-                      —
-                    </span>
-                  )}
-                </button>
+                  {row.map((btn) => {
+                    const shortcut = userHotkeys[btn.key] || "";
+                    const theme = getActionTheme(btn.key);
+                    const iconSize = Math.round(16 * btnScale);
+                    const labelSize = Math.round(7.5 * btnScale);
+                    const badgeSize = Math.round(8 * btnScale);
+                    const btnHeight = Math.round(85 * Math.min(btnScale, 1.25));
+
+                    return (
+                      <button
+                        key={btn.key}
+                        onClick={() => actions[btn.key]?.()}
+                        className="flex flex-col bg-white border border-gray-100
+                          transition-all duration-75 active:scale-95 overflow-hidden flex-shrink-0 relative group shadow-sm hover:shadow-md"
+                        style={{ height: btnHeight, width: btnWidth }}
+                      >
+                        {/* Notch indicator */}
+                        <div className="absolute top-0 right-0 w-5 h-5 overflow-hidden">
+                          <div className={`absolute top-0 right-0 w-7 h-7 ${theme.bg} rotate-45 transform origin-bottom-left translate-x-[40%] -translate-y-[40%] shadow-sm`} />
+                        </div>
+
+                        {/* Content: Centered Icon + Label */}
+                        <div className="flex flex-col items-center justify-center flex-1 w-full px-1 py-1">
+                          <div
+                            className={`rounded-full border flex items-center justify-center mb-1.5 transition-transform group-hover:scale-110 ${theme.text} ${theme.border}`}
+                            style={{
+                              padding: Math.round(5 * btnScale),
+                              borderWidth: Math.max(1, Math.round(1 * btnScale)),
+                            }}
+                          >
+                            <btn.icon style={{ width: iconSize, height: iconSize }} />
+                          </div>
+                          <span
+                            className="font-black uppercase leading-none text-center text-slate-700"
+                            style={{
+                              fontSize: labelSize,
+                              display: "-webkit-box",
+                              WebkitLineClamp: 2,
+                              WebkitBoxOrient: "vertical",
+                              overflow: "hidden",
+                              lineHeight: "1.1",
+                            }}
+                          >
+                            {t(btn.key)}
+                          </span>
+                        </div>
+
+                        {/* Floating Hotkey label */}
+                        <div className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded-sm bg-gray-50/80 backdrop-blur-sm border border-gray-100 flex items-center justify-center opacity-70 group-hover:opacity-100 transition-opacity">
+                          <span className="font-black text-slate-500" style={{ fontSize: badgeSize * 0.9 }}>
+                            {shortcut || "—"}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
               );
-            })}
-          </div>
+            });
+          })()}
         </div>
       </div>
     </div>

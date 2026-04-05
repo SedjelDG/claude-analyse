@@ -25,6 +25,7 @@ export interface AppSettings {
   language: "fr" | "ar" | "en";
   theme: "light" | "dark";
   layout: "desktop" | "tactile";
+  lockRegisterPanels: boolean;
   customHotkeys: Record<string, string>;
   hiddenActions: string[];
   hardware: {
@@ -38,6 +39,7 @@ const defaultSettings: AppSettings = {
   language: "fr",
   theme: "light",
   layout: "desktop",
+  lockRegisterPanels: false,
   customHotkeys: {},
   hiddenActions: [],
   hardware: {

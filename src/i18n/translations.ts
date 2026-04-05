@@ -43,6 +43,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     "label.settings": "إعدادات",
     "label.cashBalance": "الرصيد",
     "label.registerReady": "الصندوق جاهز.",
+    "label.lockRegisterPanels": "قفل أبعاد اللوحات",
 
     // Search
     "search.placeholder.name": "البحث عن منتج...",
@@ -132,6 +133,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     "label.settings": "Paramètres",
     "label.cashBalance": "Caisse",
     "label.registerReady": "Caisse prête.",
+    "label.lockRegisterPanels": "Verrouiller les dimensions des panneaux",
 
     // Search
     "search.placeholder.name": "Rechercher un produit...",
@@ -221,6 +223,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     "label.settings": "Settings",
     "label.cashBalance": "Cash",
     "label.registerReady": "Register ready.",
+    "label.lockRegisterPanels": "Lock panel dimensions",
 
     // Search
     "search.placeholder.name": "Search for a product...",
