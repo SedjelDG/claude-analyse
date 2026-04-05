@@ -315,99 +315,106 @@ const ProductManagement = () => {
           {/* Products tab */}
           {activeTab === "products" && (
             <div className="pos-card overflow-hidden">
+              {/* Table Header */}
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="pos-table-header">
-                      {[
-                        { key: "barcodes", label: "Code-barres" },
-                        { key: "name", label: "Nom" },
-                        { key: "category", label: "Catégorie" },
-                        { key: "price", label: "Prix (DA)" },
-                        { key: "cost", label: "Coût (DA)" },
-                        { key: "stock", label: "Stock" },
-                        { key: "unit", label: "Unité" },
-                        { key: "plu", label: "PLU" },
-                      ].map((col) => (
-                        <th
-                          key={col.key}
-                          className="px-3 py-2.5 text-left text-xs font-semibold cursor-pointer select-none"
-                          onClick={() => handleSort(col.key as keyof Product)}
-                        >
-                          <span className="flex items-center gap-1">
-                            {col.label} <SortIcon field={col.key as keyof Product} />
-                          </span>
-                        </th>
-                      ))}
-                      <th className="px-3 py-2.5 text-xs font-semibold w-8">
-                        <Scale className="h-3.5 w-3.5" />
-                      </th>
-                      <th className="px-3 py-2.5 text-xs font-semibold w-8">⏰</th>
-                      <th className="px-3 py-2.5 text-right text-xs font-semibold">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {filteredProducts.map((p) => (
-                      <tr key={p.id} className="hover:bg-muted/50 transition-colors">
-                        <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
-                          {p.barcodes[0] || "—"}
-                          {p.barcodes.length > 1 && (
-                            <span className="ml-1 text-[10px] px-1 py-0.5 rounded bg-info/10 text-info font-medium">
-                              +{p.barcodes.length - 1}
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-3 py-2 font-medium text-foreground">
-                          {p.name}
-                          {!p.isActive && (
-                            <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">INACTIF</span>
-                          )}
-                          {p.wholesaleEnabled && (
-                            <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">GROS</span>
-                          )}
-                          {p.packVariants.length > 0 && (
-                            <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-info/10 text-info font-medium">PACKS</span>
-                          )}
-                        </td>
-                        <td className="px-3 py-2 text-muted-foreground">{p.category}</td>
-                        <td className="px-3 py-2 font-semibold text-foreground">{p.price.toFixed(2)}</td>
-                        <td className="px-3 py-2 text-muted-foreground">{p.cost.toFixed(2)}</td>
-                        <td className="px-3 py-2">
-                          <span className={`font-semibold ${p.stock <= p.minStock ? "text-accent" : "text-foreground"}`}>
-                            {p.stock}
-                          </span>
-                          {p.stock <= p.minStock && (
-                            <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded bg-accent/10 text-accent font-medium">BAS</span>
-                          )}
-                        </td>
-                        <td className="px-3 py-2 text-muted-foreground">{p.unit}</td>
-                        <td className="px-3 py-2 font-mono text-xs">{p.plu || "—"}</td>
-                        <td className="px-3 py-2 text-center">
-                          {p.scaleEnabled && <Scale className="h-3.5 w-3.5 text-info inline" />}
-                        </td>
-                        <td className="px-3 py-2 text-center">
-                          {hasExpirationWarning(p) && (
-                            <AlertTriangle className="h-3.5 w-3.5 text-warning inline" />
-                          )}
-                        </td>
-                        <td className="px-3 py-2 text-right">
-                          <div className="flex items-center justify-end gap-1">
-                            <button onClick={() => openEditProduct(p)} className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground">
-                              <Edit2 className="h-3.5 w-3.5" />
-                            </button>
-                            <button onClick={() => navigateToPurchase(p.id)} className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-info">
-                              <Truck className="h-3.5 w-3.5" />
-                            </button>
-                            <button onClick={() => deleteProduct(p.id)} className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-accent">
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <div className="grid text-xs font-semibold pos-table-header" style={{ gridTemplateColumns: "140px 1fr 100px 90px 90px 80px 60px 60px 40px 40px 100px" }}>
+                  {[
+                    { key: "barcodes", label: "Code-barres" },
+                    { key: "name", label: "Nom" },
+                    { key: "category", label: "Catégorie" },
+                    { key: "price", label: "Prix (DA)" },
+                    { key: "cost", label: "Coût (DA)" },
+                    { key: "stock", label: "Stock" },
+                    { key: "unit", label: "Unité" },
+                    { key: "plu", label: "PLU" },
+                  ].map((col) => (
+                    <div
+                      key={col.key}
+                      className="px-3 py-2.5 cursor-pointer select-none"
+                      onClick={() => handleSort(col.key as keyof Product)}
+                    >
+                      <span className="flex items-center gap-1">
+                        {col.label} <SortIcon field={col.key as keyof Product} />
+                      </span>
+                    </div>
+                  ))}
+                  <div className="px-3 py-2.5 flex items-center"><Scale className="h-3.5 w-3.5" /></div>
+                  <div className="px-3 py-2.5 flex items-center">⏰</div>
+                  <div className="px-3 py-2.5 text-right">Actions</div>
+                </div>
               </div>
+              {/* Virtualized Rows */}
+              <List
+                height={600}
+                itemCount={filteredProducts.length}
+                itemSize={40}
+                width="100%"
+                overscanCount={10}
+              >
+                {({ index, style }: { index: number; style: React.CSSProperties }) => {
+                  const p = filteredProducts[index];
+                  if (!p) return null;
+                  return (
+                    <div className="grid items-center text-sm hover:bg-muted/50 transition-colors border-b border-border" key={p.id}
+                      style={{ ...style, gridTemplateColumns: "140px 1fr 100px 90px 90px 80px 60px 60px 40px 40px 100px" }}>
+                      <div className="px-3 py-1 font-mono text-xs text-muted-foreground truncate">
+                        {p.barcodes[0] || "—"}
+                        {p.barcodes.length > 1 && (
+                          <span className="ml-1 text-[10px] px-1 py-0.5 rounded bg-info/10 text-info font-medium">
+                            +{p.barcodes.length - 1}
+                          </span>
+                        )}
+                      </div>
+                      <div className="px-3 py-1 font-medium text-foreground truncate">
+                        {p.name}
+                        {!p.isActive && (
+                          <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">INACTIF</span>
+                        )}
+                        {p.wholesaleEnabled && (
+                          <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">GROS</span>
+                        )}
+                        {p.packVariants.length > 0 && (
+                          <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-info/10 text-info font-medium">PACKS</span>
+                        )}
+                      </div>
+                      <div className="px-3 py-1 text-muted-foreground truncate">{p.category}</div>
+                      <div className="px-3 py-1 font-semibold text-foreground">{p.price.toFixed(2)}</div>
+                      <div className="px-3 py-1 text-muted-foreground">{p.cost.toFixed(2)}</div>
+                      <div className="px-3 py-1">
+                        <span className={`font-semibold ${p.stock <= p.minStock ? "text-accent" : "text-foreground"}`}>
+                          {p.stock}
+                        </span>
+                        {p.stock <= p.minStock && (
+                          <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded bg-accent/10 text-accent font-medium">BAS</span>
+                        )}
+                      </div>
+                      <div className="px-3 py-1 text-muted-foreground">{p.unit}</div>
+                      <div className="px-3 py-1 font-mono text-xs">{p.plu || "—"}</div>
+                      <div className="px-3 py-1 text-center">
+                        {p.scaleEnabled && <Scale className="h-3.5 w-3.5 text-info inline" />}
+                      </div>
+                      <div className="px-3 py-1 text-center">
+                        {hasExpirationWarning(p) && (
+                          <AlertTriangle className="h-3.5 w-3.5 text-warning inline" />
+                        )}
+                      </div>
+                      <div className="px-3 py-1 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <button onClick={() => openEditProduct(p)} className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground">
+                            <Edit2 className="h-3.5 w-3.5" />
+                          </button>
+                          <button onClick={() => navigateToPurchase(p.id)} className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-info">
+                            <Truck className="h-3.5 w-3.5" />
+                          </button>
+                          <button onClick={() => deleteProduct(p.id)} className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-accent">
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }}
+              </List>
               <div className="px-4 py-2 border-t border-border text-xs text-muted-foreground">
                 {filteredProducts.length} produit(s) trouvé(s)
               </div>
@@ -436,38 +443,47 @@ const ProductManagement = () => {
 
               <div className="pos-card overflow-hidden">
                 <div className="px-4 py-3 border-b border-border">
-                  <h3 className="font-semibold text-foreground">Mouvements de stock récents</h3>
+                  <h3 className="font-semibold text-foreground">Alertes de stock</h3>
                 </div>
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="pos-table-header">
-                      <th className="px-3 py-2.5 text-left text-xs font-semibold">Date</th>
                       <th className="px-3 py-2.5 text-left text-xs font-semibold">Produit</th>
-                      <th className="px-3 py-2.5 text-left text-xs font-semibold">Type</th>
-                      <th className="px-3 py-2.5 text-left text-xs font-semibold">Quantité</th>
-                      <th className="px-3 py-2.5 text-left text-xs font-semibold">Raison</th>
+                      <th className="px-3 py-2.5 text-left text-xs font-semibold">Catégorie</th>
+                      <th className="px-3 py-2.5 text-left text-xs font-semibold">Stock actuel</th>
+                      <th className="px-3 py-2.5 text-left text-xs font-semibold">Seuil minimum</th>
+                      <th className="px-3 py-2.5 text-left text-xs font-semibold">Statut</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
-                    {mockMovements.map((m) => (
-                      <tr key={m.id} className="hover:bg-muted/50">
-                        <td className="px-3 py-2 text-muted-foreground">{m.date}</td>
-                        <td className="px-3 py-2 font-medium text-foreground">{m.product}</td>
+                    {products
+                      .filter((p) => p.stock <= p.minStock)
+                      .sort((a, b) => a.stock - b.stock)
+                      .slice(0, 50)
+                      .map((p) => (
+                      <tr key={p.id} className="hover:bg-muted/50">
+                        <td className="px-3 py-2 font-medium text-foreground">{p.name}</td>
+                        <td className="px-3 py-2 text-muted-foreground">{p.category}</td>
+                        <td className={`px-3 py-2 font-semibold ${p.stock === 0 ? "text-accent" : "text-warning"}`}>
+                          {p.stock}
+                        </td>
+                        <td className="px-3 py-2 text-muted-foreground">{p.minStock}</td>
                         <td className="px-3 py-2">
                           <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                            m.type === "in" ? "bg-success/10 text-success" : m.type === "out" ? "bg-accent/10 text-accent" : "bg-info/10 text-info"
+                            p.stock === 0 ? "bg-accent/10 text-accent" : "bg-warning/10 text-warning"
                           }`}>
-                            {m.type === "in" ? "Entrée" : m.type === "out" ? "Sortie" : "Ajustement"}
+                            {p.stock === 0 ? "Épuisé" : "Faible"}
                           </span>
                         </td>
-                        <td className={`px-3 py-2 font-semibold ${movementColor(m.type)}`}>
-                          {m.type === "in" ? "+" : ""}{m.quantity}
-                        </td>
-                        <td className="px-3 py-2 text-muted-foreground">{m.reason}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
+                {products.filter((p) => p.stock <= p.minStock).length === 0 && (
+                  <div className="px-4 py-8 text-center text-sm text-muted-foreground">
+                    Aucune alerte — tous les stocks sont au-dessus du seuil minimum.
+                  </div>
+                )}
               </div>
             </div>
           )}

@@ -5,15 +5,14 @@ import {
   Plus, Minus, Search, Trash2, Trash, Lock, Percent, RotateCcw,
   CreditCard, Pause, Hash, Wallet, DoorOpen, PiggyBank, User,
   Gift, X, Power, Clock, CalendarDays, Barcode,
-  Banknote, CreditCard as CardIcon, Settings, LogOut, Globe
+  Banknote, CreditCard as CardIcon, Settings, LogOut, Globe,
+  PackageOpen
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useTranslation } from "@/hooks/useTranslation";
 import { useUserStore, STANDARD_CASHIER } from "@/hooks/useUserStore";
 import { useSettings, DEFAULT_HOTKEYS } from "@/hooks/useSettings";
 import { useCashRegister } from "@/hooks/useCashRegister";
-import { useHardware } from "@/hooks/useHardware";
-import { generateMockProducts } from "@/utils/mockProducts";
 import RegisterSearchBar from "@/components/register/RegisterSearchBar";
 
 interface CartItem {
@@ -22,6 +21,9 @@ interface CartItem {
   quantity: number;
   price: number;
   barcode?: string;
+  packVariantIndex?: number; // -1 = unit, 0+ = pack variant index
+  originalName?: string;
+  originalPrice?: number;
 }
 
 const initialCart: CartItem[] = [
@@ -77,6 +79,7 @@ const ALL_ACTION_BUTTONS = [
   { key: "action.lang", icon: Globe },
   { key: "action.treasury", icon: PiggyBank },
   { key: "action.client", icon: User },
+  { key: "action.packCycle", icon: PackageOpen },
 ];
 
 const Register = () => {
@@ -87,8 +90,6 @@ const Register = () => {
   const activeUser = currentUser || STANDARD_CASHIER;
   const { settings, getHotkeys, updateSettings } = useSettings(activeUser.id);
   const { balance: cashBalance, addMovement } = useCashRegister();
-
-  const allProducts = generateMockProducts(20000);
 
   // Multi-client carts
   const [clientCarts, setClientCarts] = useState<Record<number, CartItem[]>>({
@@ -140,16 +141,6 @@ const Register = () => {
     toast({ title: t("toast.itemAdded"), description: product.name });
   }, [updateCart, toast, t]);
 
-  // Connect Barcode Scanner
-  const handleScan = useCallback((barcode: string) => {
-    const product = allProducts.find((p) => p.barcode === barcode);
-    if (product) {
-      addProductToCart(product);
-    }
-  }, [allProducts, addProductToCart]);
-  
-  const { isPrinting, printReceipt } = useHardware({ onScan: handleScan });
-
   const actions: Record<string, () => void> = {
     "action.add": () => setSearchOpen(true),
     "action.deduct": () => {
@@ -180,10 +171,7 @@ const Register = () => {
         toast({ title: t("toast.returnProcessed"), description: item.name });
       }
     },
-    "action.payment": () => {
-      // Simulate Thermal Printer
-      printReceipt({ cart, totalTTC }).then(() => setPaymentDialog(true));
-    },
+    "action.payment": () => setPaymentDialog(true),
     "action.hold": () => { toast({ title: t("toast.transactionHeld"), description: `Client N°${activeClient}` }); },
     "action.quantity": () => {
       if (!selectedItemId) { toast({ title: t("toast.noItemSelected"), description: t("toast.selectItem") }); return; }
@@ -212,9 +200,34 @@ const Register = () => {
       navigate("/");
     },
     "action.lang": () => {
-      const newLang = settings.language === "fr" ? "ar" : settings.language === "ar" ? "en" : "fr";
+      const newLang = settings.language === "fr" ? "en" : "fr";
       updateSettings({ language: newLang });
-      toast({ title: newLang === "fr" ? "Français" : newLang === "ar" ? "العربية" : "English" });
+      toast({ title: newLang === "fr" ? "Français" : "English" });
+    },
+    "action.packCycle": () => {
+      if (!selectedItemId) { toast({ title: t("toast.noItemSelected"), description: t("toast.selectItem") }); return; }
+      const item = cart.find((i) => i.id === selectedItemId);
+      if (!item) return;
+      // Look up pack variants from mock data (in production this would come from a product DB)
+      const mockPackVariants: Record<string, { size: number; name: string; price: number }[]> = {
+        "Lait 1L": [{ size: 6, name: "Pack 6", price: 550 }, { size: 12, name: "Carton 12", price: 1050 }],
+        "Eau 1.5L": [{ size: 6, name: "Pack 6", price: 140 }],
+      };
+      const baseName = item.originalName || item.name;
+      const variants = mockPackVariants[baseName];
+      if (!variants || variants.length === 0) { toast({ title: "Pas de variantes", description: baseName }); return; }
+      const currentIdx = item.packVariantIndex ?? -1;
+      const nextIdx = currentIdx + 1 >= variants.length ? -1 : currentIdx + 1;
+      if (nextIdx === -1) {
+        // Back to unit
+        updateCart((prev) => prev.map((i) => i.id === selectedItemId ? { ...i, name: baseName, price: item.originalPrice || item.price, packVariantIndex: -1, originalName: baseName } : i));
+        toast({ title: t("action.packCycle"), description: baseName });
+      } else {
+        const v = variants[nextIdx];
+        const origPrice = item.originalPrice || item.price;
+        updateCart((prev) => prev.map((i) => i.id === selectedItemId ? { ...i, name: `${baseName} (${v.name})`, price: v.price, packVariantIndex: nextIdx, originalName: baseName, originalPrice: origPrice } : i));
+        toast({ title: t("action.packCycle"), description: v.name });
+      }
     },
   };
 
@@ -334,19 +347,6 @@ const Register = () => {
             </motion.div>
           </motion.div>
         )}
-      </AnimatePresence>
-
-      {/* PRINTER OVERLAY */}
-      <AnimatePresence>
-         {isPrinting && (
-           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center">
-             <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} className="bg-white p-8 rounded-2xl shadow-xl flex flex-col items-center">
-                <svg className="w-16 h-16 text-primary mb-4 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
-                <h2 className="text-xl font-black text-slate-800 tracking-tight text-center whitespace-nowrap">Impression du Ticket...</h2>
-                <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mt-2">Veuillez patienter...</p>
-             </motion.div>
-           </motion.div>
-         )}
       </AnimatePresence>
 
       {/* QUANTITY DIALOG */}
