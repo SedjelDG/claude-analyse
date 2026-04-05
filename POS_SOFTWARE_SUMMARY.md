@@ -85,6 +85,7 @@ Required functions:
 - Search by barcode
 - Scan products directly
 - Use keyboard shortcuts with function keys and Ctrl combinations
+- Sell by Pack: Cycle thru product pack variants (e.g. Unit -> Pack 6 -> Carton 12) using F8 or the Pack button
 - Show live clock and date
 
 ## Product Management
