@@ -1,6 +1,6 @@
 import { NavLink, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { LayoutDashboard, Package, Scale, Users, ChevronLeft, LucideIcon, Banknote, FileText } from "lucide-react";
+import { LayoutDashboard, Package, Scale, Users, ChevronLeft, LucideIcon, Banknote, FileText, Truck } from "lucide-react";
 import { useState } from "react";
 import { useUserStore } from "@/hooks/useUserStore";
 
@@ -15,6 +15,7 @@ interface DockItem {
 const dockItems: DockItem[] = [
   { to: "/management", icon: LayoutDashboard, label: "Dashboard", end: true, color: "hsl(var(--primary))" },
   { to: "/management/products", icon: Package, label: "Articles", color: "hsl(var(--success))" },
+  { to: "/management/purchases", icon: Truck, label: "Achats", color: "hsl(var(--info))" },
   { to: "/management/cash", icon: Banknote, label: "Caisse", color: "hsl(var(--warning))" },
   { to: "/management/reports", icon: FileText, label: "Rapports", color: "hsl(var(--accent))" },
   { to: "/management/scale", icon: Scale, label: "Balance / PLU", color: "hsl(var(--info))" },

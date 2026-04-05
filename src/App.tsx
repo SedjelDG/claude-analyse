@@ -15,6 +15,7 @@ import ScaleIntegration from "./pages/management/ScaleIntegration.tsx";
 import Users from "./pages/management/Users.tsx";
 import CashHistory from "./pages/management/CashHistory.tsx";
 import Reports from "./pages/management/Reports.tsx";
+import Purchases from "./pages/management/Purchases.tsx";
 
 const queryClient = new QueryClient();
 
@@ -38,6 +39,7 @@ const App = () => {
               <Route path="users" element={<Users />} />
               <Route path="cash" element={<CashHistory />} />
               <Route path="reports" element={<Reports />} />
+              <Route path="purchases" element={<Purchases />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>

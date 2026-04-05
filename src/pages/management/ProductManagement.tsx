@@ -1,42 +1,25 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { FixedSizeList as List } from "react-window";
-import { generateMockProducts, Product, ExpirationEntry } from "@/utils/mockProducts";
+import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Package, Truck, BarChart3, Plus, Search, Edit2, Trash2,
   ChevronDown, ChevronUp, Save, X, Scale, Tag, AlertTriangle,
-  ScanBarcode, Calendar
+  ScanBarcode, Calendar, Image as ImageIcon, Info, Keyboard,
+  ToggleLeft, Palette, ShoppingCart
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { generateMockProducts, Product, ExpirationEntry, PackVariant } from "@/utils/mockProducts";
 
-type Tab = "products" | "stock" | "purchases";
 
-// Imported from mockProducts.ts
-
-interface Purchase {
-  id: string;
-  date: string;
-  supplier: string;
-  productName: string;
-  quantity: number;
-  unitCost: number;
-  total: number;
-  status: "pending" | "received" | "partial";
-}
-
-const mockPurchases: Purchase[] = [
-  { id: "P001", date: "2026-03-23", supplier: "Fournisseur A", productName: "Lait 1L", quantity: 100, unitCost: 80, total: 8000, status: "received" },
-  { id: "P002", date: "2026-03-22", supplier: "Fournisseur B", productName: "Sucre 1kg", quantity: 50, unitCost: 85, total: 4250, status: "pending" },
-  { id: "P003", date: "2026-03-21", supplier: "Fournisseur A", productName: "Eau 1.5L", quantity: 200, unitCost: 18, total: 3600, status: "received" },
-  { id: "P004", date: "2026-03-20", supplier: "Fournisseur C", productName: "Pommes", quantity: 30, unitCost: 180, total: 5400, status: "partial" },
-];
+type PageTab = "products" | "stock";
 
 interface StockMovement {
   id: string;
@@ -55,19 +38,21 @@ const mockMovements: StockMovement[] = [
   { id: "M5", date: "2026-03-21", product: "Eau 1.5L", type: "in", quantity: 200, reason: "Achat P003" },
 ];
 
-const tabs: { id: Tab; label: string; icon: typeof Package }[] = [
+const pageTabs: { id: PageTab; label: string; icon: typeof Package }[] = [
   { id: "products", label: "Produits", icon: Package },
   { id: "stock", label: "Stock", icon: BarChart3 },
-  { id: "purchases", label: "Achats", icon: Truck },
 ];
 
 type EditableProduct = Omit<Product, "id"> & { id?: string };
 
 const emptyProduct: EditableProduct = {
-  barcodes: [""], name: "", category: "Alimentation", price: 0, cost: 0,
+  barcodes: [""], name: "", category: "Alimentation", brand: "", price: 0, cost: 0,
   stock: 0, minStock: 0, unit: "pcs", plu: "", scaleEnabled: false,
   packSize: 1, packBuyingPrice: 0, wholesaleEnabled: false,
   wholesalePrice: 0, wholesaleMinQty: 0, expirationDates: [],
+  vatRate: 0, packVariants: [], supplier: "", image: "",
+  shortLabel: "", buttonColor: "", allowPriceOverride: false, isActive: true,
+  tareWeight: 0, labelFormat: "standard",
 };
 
 const daysUntil = (dateStr: string) => {
@@ -79,21 +64,44 @@ const daysUntil = (dateStr: string) => {
 const hasExpirationWarning = (p: Product) =>
   p.expirationDates.some((e) => daysUntil(e.date) <= 30 && daysUntil(e.date) >= 0);
 
+const BUTTON_COLORS = [
+  { value: "", label: "Par défaut" },
+  { value: "bg-register-btn-green", label: "Vert" },
+  { value: "bg-register-btn-blue", label: "Bleu" },
+  { value: "bg-register-btn-salmon", label: "Saumon" },
+  { value: "bg-register-btn-gold", label: "Or" },
+  { value: "bg-register-btn-pink", label: "Rose" },
+  { value: "bg-register-btn-teal", label: "Sarcelle" },
+  { value: "bg-register-btn-purple", label: "Violet" },
+  { value: "bg-register-btn-olive", label: "Olive" },
+];
+
+/* ─── Section Divider ─── */
+const SectionDivider = ({ label }: { label: string }) => (
+  <div className="flex items-center gap-3 my-4">
+    <div className="flex-1 h-px bg-border" />
+    <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{label}</span>
+    <div className="flex-1 h-px bg-border" />
+  </div>
+);
+
+/* ─── Keyboard badge ─── */
+const KBD = ({ children }: { children: React.ReactNode }) => (
+  <kbd className="inline-flex items-center px-1.5 py-0.5 text-[9px] font-mono font-semibold bg-muted border border-border rounded text-muted-foreground">{children}</kbd>
+);
+
 const ProductManagement = () => {
-  const [activeTab, setActiveTab] = useState<Tab>("products");
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState<PageTab>("products");
   const [search, setSearch] = useState("");
   const [products, setProducts] = useState<Product[]>([]);
-  const [purchases, setPurchases] = useState<Purchase[]>(mockPurchases);
-  useEffect(() => {
-    setProducts(generateMockProducts(20000));
-  }, []);
+  useEffect(() => { setProducts(generateMockProducts(20000)); }, []);
   const [showProductDialog, setShowProductDialog] = useState(false);
-  const [showPurchaseDialog, setShowPurchaseDialog] = useState(false);
   const [editingProduct, setEditingProduct] = useState<EditableProduct>(emptyProduct);
-  const [purchaseForm, setPurchaseForm] = useState({ productId: "", supplier: "", quantity: 0, unitCost: 0 });
   const [sortField, setSortField] = useState<keyof Product>("name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [newBarcode, setNewBarcode] = useState("");
+  const [formTab, setFormTab] = useState("general");
 
   const filteredProducts = products
     .filter((p) =>
@@ -116,28 +124,55 @@ const ProductManagement = () => {
   const SortIcon = ({ field }: { field: keyof Product }) =>
     sortField === field ? (sortDir === "asc" ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />) : null;
 
-  const openNewProduct = () => { setEditingProduct({ ...emptyProduct, barcodes: [""] }); setShowProductDialog(true); };
-  const openEditProduct = (p: Product) => { setEditingProduct({ ...p }); setShowProductDialog(true); };
+  const openNewProduct = () => { setEditingProduct({ ...emptyProduct, barcodes: [""] }); setFormTab("general"); setShowProductDialog(true); };
+  const openEditProduct = (p: Product) => { setEditingProduct({ ...p }); setFormTab("general"); setShowProductDialog(true); };
 
+  // ─── Calculations ───
   const unitCostFromPack = useMemo(() => {
     if (editingProduct.packSize > 1 && editingProduct.packBuyingPrice > 0) {
-      return (editingProduct.packBuyingPrice / editingProduct.packSize).toFixed(2);
+      return editingProduct.packBuyingPrice / editingProduct.packSize;
     }
     return null;
   }, [editingProduct.packSize, editingProduct.packBuyingPrice]);
 
+  const effectiveCost = unitCostFromPack ?? editingProduct.cost;
+
   const margin = useMemo(() => {
-    const cost = unitCostFromPack ? parseFloat(unitCostFromPack) : editingProduct.cost;
-    if (cost > 0 && editingProduct.price > 0) {
-      return (((editingProduct.price - cost) / cost) * 100).toFixed(1);
+    if (effectiveCost > 0 && editingProduct.price > 0) {
+      return ((editingProduct.price - effectiveCost) / effectiveCost) * 100;
     }
     return null;
-  }, [editingProduct.price, editingProduct.cost, unitCostFromPack]);
+  }, [editingProduct.price, effectiveCost]);
+
+  const vatAmount = useMemo(() => {
+    if (editingProduct.vatRate > 0 && editingProduct.price > 0) {
+      const ht = editingProduct.price / (1 + editingProduct.vatRate / 100);
+      return editingProduct.price - ht;
+    }
+    return 0;
+  }, [editingProduct.price, editingProduct.vatRate]);
+
+  const priceHT = editingProduct.price - vatAmount;
+  const profitPerUnit = editingProduct.price - effectiveCost;
+
+  const marginBadge = margin !== null
+    ? margin >= 20 ? { label: "Bonne", cls: "bg-success/15 text-success" }
+    : margin >= 5 ? { label: "Correcte", cls: "bg-warning/15 text-warning" }
+    : { label: "Faible", cls: "bg-accent/15 text-accent" }
+    : null;
+
+  // Bidirectional margin ↔ price
+  const setMarginValue = (m: number) => {
+    if (effectiveCost > 0) {
+      const newPrice = effectiveCost * (1 + m / 100);
+      setEditingProduct((p) => ({ ...p, price: Math.round(newPrice * 100) / 100 }));
+    }
+  };
 
   const saveProduct = () => {
     const finalProduct = { ...editingProduct };
-    if (unitCostFromPack) {
-      finalProduct.cost = parseFloat(unitCostFromPack);
+    if (unitCostFromPack !== null) {
+      finalProduct.cost = Math.round(unitCostFromPack * 100) / 100;
     }
     finalProduct.barcodes = finalProduct.barcodes.filter((b) => b.trim() !== "");
     if (finalProduct.id) {
@@ -150,45 +185,8 @@ const ProductManagement = () => {
 
   const deleteProduct = (id: string) => setProducts((prev) => prev.filter((p) => p.id !== id));
 
-  const openNewPurchase = (productId?: string) => {
-    const p = products.find((x) => x.id === productId);
-    setPurchaseForm({ productId: productId || "", supplier: "", quantity: 0, unitCost: p?.cost || 0 });
-    setShowPurchaseDialog(true);
-  };
-
-  const savePurchase = () => {
-    if (!purchaseForm.productId || purchaseForm.quantity <= 0) return;
-    const targetProduct = products.find((p) => p.id === purchaseForm.productId);
-    if (!targetProduct) return;
-    
-    const newPurchase: Purchase = {
-      id: `P${String(purchases.length + 1).padStart(3, "0")}`,
-      date: new Date().toISOString().split("T")[0],
-      supplier: purchaseForm.supplier || "Inconnu",
-      productName: targetProduct.name,
-      quantity: purchaseForm.quantity,
-      unitCost: purchaseForm.unitCost,
-      total: purchaseForm.quantity * purchaseForm.unitCost,
-      status: "received"
-    };
-    setPurchases((prev) => [newPurchase, ...prev]);
-
-    setProducts((prev) => {
-      const idx = prev.findIndex((p) => p.id === purchaseForm.productId);
-      if (idx >= 0) {
-        const updated = [...prev];
-        updated[idx] = { 
-          ...updated[idx], 
-          stock: updated[idx].stock + purchaseForm.quantity,
-          cost: purchaseForm.unitCost > 0 ? purchaseForm.unitCost : updated[idx].cost
-        };
-        return updated;
-      }
-      return prev;
-    });
-
-    setPurchaseForm({ productId: "", supplier: "", quantity: 0, unitCost: 0 });
-    setShowPurchaseDialog(false);
+  const navigateToPurchase = (productId: string) => {
+    navigate(`/management/purchases?product=${productId}`);
   };
 
   const addBarcode = () => {
@@ -217,11 +215,48 @@ const ProductManagement = () => {
     setEditingProduct((p) => ({ ...p, expirationDates: p.expirationDates.filter((_, i) => i !== index) }));
   };
 
+  const addPackVariant = () => {
+    setEditingProduct((p) => ({ ...p, packVariants: [...p.packVariants, { size: 6, name: "", price: 0 }] }));
+  };
+
+  const updatePackVariant = (index: number, field: keyof PackVariant, value: string | number) => {
+    setEditingProduct((p) => ({
+      ...p,
+      packVariants: p.packVariants.map((v, i) => (i === index ? { ...v, [field]: value } : v)),
+    }));
+  };
+
+  const removePackVariant = (index: number) => {
+    setEditingProduct((p) => ({ ...p, packVariants: p.packVariants.filter((_, i) => i !== index) }));
+  };
+
+  // Keyboard shortcuts in dialog
+  useEffect(() => {
+    if (!showProductDialog) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.key === "s") { e.preventDefault(); saveProduct(); }
+      if (e.key === "F2") {
+        e.preventDefault();
+        const nameInput = document.getElementById("product-name-input");
+        nameInput?.focus();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  });
+
   const statusColor = (s: string) =>
     s === "received" ? "bg-success/10 text-success" : s === "pending" ? "bg-warning/10 text-warning" : "bg-info/10 text-info";
 
   const movementColor = (t: string) =>
     t === "in" ? "text-success" : t === "out" ? "text-accent" : "text-info";
+
+  const formTabIndex = ["general", "stock", "scale", "cashier"].indexOf(formTab);
+  const formTabCount = 4;
+  const canGoNext = formTabIndex < formTabCount - 1;
+  const canGoBack = formTabIndex > 0;
+  const goNext = () => { if (canGoNext) setFormTab(["general", "stock", "scale", "cashier"][formTabIndex + 1]); };
+  const goBack = () => { if (canGoBack) setFormTab(["general", "stock", "scale", "cashier"][formTabIndex - 1]); };
 
   return (
     <div className="space-y-4">
@@ -232,9 +267,9 @@ const ProductManagement = () => {
         </div>
       </div>
 
-      {/* Tabs */}
+      {/* Page Tabs */}
       <div className="flex gap-1 bg-muted p-1 rounded-lg w-fit">
-        {tabs.map((t) => (
+        {pageTabs.map((t) => (
           <button
             key={t.id}
             onClick={() => setActiveTab(t.id)}
@@ -266,16 +301,6 @@ const ProductManagement = () => {
             <Plus className="h-4 w-4 mr-1" /> Nouveau produit
           </Button>
         )}
-        {activeTab === "purchases" && (
-          <div className="flex gap-2">
-            <Button onClick={() => openNewPurchase()} className="bg-primary text-primary-foreground hover:bg-primary/90">
-              <Plus className="h-4 w-4 mr-1" /> Nouvel achat
-            </Button>
-            <Button onClick={() => { openNewProduct(); }} variant="outline" className="border-primary text-primary">
-              <Plus className="h-4 w-4 mr-1" /> Produit + Achat
-            </Button>
-          </div>
-        )}
       </div>
 
       {/* Content */}
@@ -291,96 +316,97 @@ const ProductManagement = () => {
           {activeTab === "products" && (
             <div className="pos-card overflow-hidden">
               <div className="overflow-x-auto">
-                  <div className="flex w-full pos-table-header bg-muted border-b border-border text-xs font-semibold py-2">
-                    {[
-                      { key: "barcodes", label: "Code-barres", w: "15%" },
-                      { key: "name", label: "Nom", w: "20%" },
-                      { key: "category", label: "Catégorie", w: "12%" },
-                      { key: "price", label: "Prix (DA)", w: "8%" },
-                      { key: "cost", label: "Coût (DA)", w: "8%" },
-                      { key: "stock", label: "Stock", w: "7%" },
-                      { key: "unit", label: "Unité", w: "5%" },
-                      { key: "plu", label: "PLU", w: "7%" },
-                      { key: "scale", label: <Scale className="h-3.5 w-3.5" />, w: "4%" },
-                      { key: "clock", label: "⏰", w: "4%" },
-                      { key: "actions", label: "Actions", w: "10%", right: true },
-                    ].map((col) => (
-                      <div
-                        key={col.key}
-                        className={`px-3 flex items-center gap-1 cursor-pointer select-none ${col.right ? 'justify-end' : ''}`}
-                        style={{ width: col.w }}
-                        onClick={() => col.key !== 'scale' && col.key !== 'clock' && col.key !== 'actions' && handleSort(col.key as keyof Product)}
-                      >
-                        {col.label} <SortIcon field={col.key as keyof Product} />
-                      </div>
-                    ))}
-                  </div>
-                  <div className="divide-y divide-border">
-                    <List
-                      height={600}
-                      itemCount={filteredProducts.length}
-                      itemSize={50}
-                      width={"100%"}
-                      className="hide-scrollbar"
-                      itemData={filteredProducts}
-                      style={{}}
-                    >
-                      {({ index, style }) => {
-                        const p = filteredProducts[index];
-                        if (!p) return <div style={style}></div>;
-                        return (
-                          <div style={{ ...style, display: "flex", alignItems: "center" }} className="hover:bg-muted/50 transition-colors border-b border-border w-full text-sm">
-                            <div className="px-3 font-mono text-xs text-muted-foreground truncate" style={{ width: "15%" }}>
-                              {p.barcodes[0] || "—"}
-                              {p.barcodes.length > 1 && (
-                                <span className="ml-1 text-[10px] px-1 py-0.5 rounded bg-info/10 text-info font-medium">
-                                  +{p.barcodes.length - 1}
-                                </span>
-                              )}
-                            </div>
-                            <div className="px-3 font-medium text-foreground truncate" style={{ width: "20%" }}>
-                              {p.name}
-                              {p.wholesaleEnabled && (
-                                <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">GROS</span>
-                              )}
-                            </div>
-                            <div className="px-3 text-muted-foreground truncate" style={{ width: "12%" }}>{p.category}</div>
-                            <div className="px-3 font-semibold text-foreground truncate" style={{ width: "8%" }}>{p.price.toFixed(2)}</div>
-                            <div className="px-3 text-muted-foreground truncate" style={{ width: "8%" }}>{p.cost.toFixed(2)}</div>
-                            <div className="px-3 truncate" style={{ width: "7%" }}>
-                              <span className={`font-semibold ${p.stock <= p.minStock ? "text-accent" : "text-foreground"}`}>
-                                {p.stock}
-                              </span>
-                              {p.stock <= p.minStock && (
-                                <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded bg-accent/10 text-accent font-medium">BAS</span>
-                              )}
-                            </div>
-                            <div className="px-3 text-muted-foreground truncate" style={{ width: "5%" }}>{p.unit}</div>
-                            <div className="px-3 font-mono text-xs truncate" style={{ width: "7%" }}>{p.plu || "—"}</div>
-                            <div className="px-3 flex justify-center" style={{ width: "4%" }}>
-                              {p.scaleEnabled && <Scale className="h-3.5 w-3.5 text-info" />}
-                            </div>
-                            <div className="px-3 flex justify-center" style={{ width: "4%" }}>
-                              {hasExpirationWarning(p) && (
-                                <AlertTriangle className="h-3.5 w-3.5 text-warning" />
-                              )}
-                            </div>
-                            <div className="px-3 flex items-center justify-end gap-1" style={{ width: "10%" }}>
-                              <button onClick={() => openEditProduct(p)} className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground">
-                                <Edit2 className="h-3.5 w-3.5" />
-                              </button>
-                              <button onClick={() => openNewPurchase(p.id)} className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-info">
-                                <Truck className="h-3.5 w-3.5" />
-                              </button>
-                              <button onClick={() => deleteProduct(p.id)} className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-accent">
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
-                            </div>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="pos-table-header">
+                      {[
+                        { key: "barcodes", label: "Code-barres" },
+                        { key: "name", label: "Nom" },
+                        { key: "category", label: "Catégorie" },
+                        { key: "price", label: "Prix (DA)" },
+                        { key: "cost", label: "Coût (DA)" },
+                        { key: "stock", label: "Stock" },
+                        { key: "unit", label: "Unité" },
+                        { key: "plu", label: "PLU" },
+                      ].map((col) => (
+                        <th
+                          key={col.key}
+                          className="px-3 py-2.5 text-left text-xs font-semibold cursor-pointer select-none"
+                          onClick={() => handleSort(col.key as keyof Product)}
+                        >
+                          <span className="flex items-center gap-1">
+                            {col.label} <SortIcon field={col.key as keyof Product} />
+                          </span>
+                        </th>
+                      ))}
+                      <th className="px-3 py-2.5 text-xs font-semibold w-8">
+                        <Scale className="h-3.5 w-3.5" />
+                      </th>
+                      <th className="px-3 py-2.5 text-xs font-semibold w-8">⏰</th>
+                      <th className="px-3 py-2.5 text-right text-xs font-semibold">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {filteredProducts.map((p) => (
+                      <tr key={p.id} className="hover:bg-muted/50 transition-colors">
+                        <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
+                          {p.barcodes[0] || "—"}
+                          {p.barcodes.length > 1 && (
+                            <span className="ml-1 text-[10px] px-1 py-0.5 rounded bg-info/10 text-info font-medium">
+                              +{p.barcodes.length - 1}
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 font-medium text-foreground">
+                          {p.name}
+                          {!p.isActive && (
+                            <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">INACTIF</span>
+                          )}
+                          {p.wholesaleEnabled && (
+                            <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">GROS</span>
+                          )}
+                          {p.packVariants.length > 0 && (
+                            <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-info/10 text-info font-medium">PACKS</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-muted-foreground">{p.category}</td>
+                        <td className="px-3 py-2 font-semibold text-foreground">{p.price.toFixed(2)}</td>
+                        <td className="px-3 py-2 text-muted-foreground">{p.cost.toFixed(2)}</td>
+                        <td className="px-3 py-2">
+                          <span className={`font-semibold ${p.stock <= p.minStock ? "text-accent" : "text-foreground"}`}>
+                            {p.stock}
+                          </span>
+                          {p.stock <= p.minStock && (
+                            <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded bg-accent/10 text-accent font-medium">BAS</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-muted-foreground">{p.unit}</td>
+                        <td className="px-3 py-2 font-mono text-xs">{p.plu || "—"}</td>
+                        <td className="px-3 py-2 text-center">
+                          {p.scaleEnabled && <Scale className="h-3.5 w-3.5 text-info inline" />}
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          {hasExpirationWarning(p) && (
+                            <AlertTriangle className="h-3.5 w-3.5 text-warning inline" />
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <button onClick={() => openEditProduct(p)} className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground">
+                              <Edit2 className="h-3.5 w-3.5" />
+                            </button>
+                            <button onClick={() => navigateToPurchase(p.id)} className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-info">
+                              <Truck className="h-3.5 w-3.5" />
+                            </button>
+                            <button onClick={() => deleteProduct(p.id)} className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-accent">
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
                           </div>
-                        );
-                      }}
-                    </List>
-                  </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
               <div className="px-4 py-2 border-t border-border text-xs text-muted-foreground">
                 {filteredProducts.length} produit(s) trouvé(s)
@@ -445,74 +471,98 @@ const ProductManagement = () => {
               </div>
             </div>
           )}
-
-          {/* Purchases tab */}
-          {activeTab === "purchases" && (
-            <div className="pos-card overflow-hidden">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="pos-table-header">
-                    <th className="px-3 py-2.5 text-left text-xs font-semibold">Réf</th>
-                    <th className="px-3 py-2.5 text-left text-xs font-semibold">Date</th>
-                    <th className="px-3 py-2.5 text-left text-xs font-semibold">Fournisseur</th>
-                    <th className="px-3 py-2.5 text-left text-xs font-semibold">Produit</th>
-                    <th className="px-3 py-2.5 text-left text-xs font-semibold">Qté</th>
-                    <th className="px-3 py-2.5 text-left text-xs font-semibold">Coût unit.</th>
-                    <th className="px-3 py-2.5 text-left text-xs font-semibold">Total (DA)</th>
-                    <th className="px-3 py-2.5 text-left text-xs font-semibold">Statut</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {mockPurchases.map((p) => (
-                    <tr key={p.id} className="hover:bg-muted/50">
-                      <td className="px-3 py-2 font-mono text-xs text-muted-foreground">{p.id}</td>
-                      <td className="px-3 py-2 text-muted-foreground">{p.date}</td>
-                      <td className="px-3 py-2 text-foreground">{p.supplier}</td>
-                      <td className="px-3 py-2 font-medium text-foreground">{p.productName}</td>
-                      <td className="px-3 py-2 text-foreground">{p.quantity}</td>
-                      <td className="px-3 py-2 text-muted-foreground">{p.unitCost.toFixed(2)}</td>
-                      <td className="px-3 py-2 font-semibold text-foreground">{p.total.toLocaleString()}</td>
-                      <td className="px-3 py-2">
-                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusColor(p.status)}`}>
-                          {p.status === "received" ? "Reçu" : p.status === "pending" ? "En attente" : "Partiel"}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <div className="px-4 py-2 border-t border-border text-xs text-muted-foreground">
-                {mockPurchases.length} achat(s)
-              </div>
-            </div>
-          )}
         </motion.div>
       </AnimatePresence>
 
-      {/* Enhanced Product Dialog */}
+      {/* ═══════════════════════════════════════════════════════════════
+          PRODUCT FORM DIALOG — 4 Tabs
+         ═══════════════════════════════════════════════════════════════ */}
       <Dialog open={showProductDialog} onOpenChange={setShowProductDialog}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{editingProduct.id ? "Modifier le produit" : "Nouveau produit"}</DialogTitle>
-            <DialogDescription className="sr-only">Remplissez les informations du produit ci-dessous.</DialogDescription>
-          </DialogHeader>
+        <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col p-0 gap-0">
+          {/* Header */}
+          <div className="px-5 pt-5 pb-3 border-b border-border">
+            <div className="flex items-center justify-between">
+              <div className="flex-1 min-w-0">
+                <h2 className="text-base font-bold text-foreground truncate">
+                  {editingProduct.name || (editingProduct.id ? "Modifier le produit" : "Nouveau produit")}
+                </h2>
+                <p className="text-[10px] text-muted-foreground flex items-center gap-1.5 mt-0.5">
+                  <Keyboard className="h-3 w-3" />
+                  <KBD>Tab</KBD> / <KBD>Shift+Tab</KBD> pour naviguer · <KBD>F2</KBD> nom · <KBD>Ctrl+S</KBD> sauvegarder
+                </p>
+              </div>
+              {/* Image picker */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button className="w-10 h-10 rounded border-2 border-dashed border-border hover:border-primary flex items-center justify-center text-muted-foreground hover:text-primary transition-colors shrink-0 ml-3 overflow-hidden">
+                    {editingProduct.image ? (
+                      <img src={editingProduct.image} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <ImageIcon className="h-4 w-4" />
+                    )}
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-64 p-3" align="end">
+                  <Label className="text-xs font-medium">URL de l'image</Label>
+                  <Input
+                    value={editingProduct.image}
+                    onChange={(e) => setEditingProduct((p) => ({ ...p, image: e.target.value }))}
+                    placeholder="https://..."
+                    className="mt-1 text-xs"
+                  />
+                  {editingProduct.image && (
+                    <Button variant="ghost" size="sm" className="mt-2 text-xs text-accent" onClick={() => setEditingProduct((p) => ({ ...p, image: "" }))}>
+                      Supprimer
+                    </Button>
+                  )}
+                </PopoverContent>
+              </Popover>
+            </div>
+          </div>
 
-          <Accordion type="multiple" defaultValue={["general", "barcodes", "pricing"]} className="space-y-1">
-            {/* General Info */}
-            <AccordionItem value="general" className="border rounded-lg px-3">
-              <AccordionTrigger className="text-sm font-semibold py-3 hover:no-underline">
-                <span className="flex items-center gap-2"><Package className="h-4 w-4 text-primary" /> Informations générales</span>
-              </AccordionTrigger>
-              <AccordionContent>
-                <div className="grid grid-cols-2 gap-3 pb-2">
+          {/* Tabs */}
+          <Tabs value={formTab} onValueChange={setFormTab} className="flex-1 flex flex-col overflow-hidden">
+            <div className="px-5 pt-2 border-b border-border">
+              <TabsList className="bg-transparent h-auto p-0 gap-0 rounded-none w-full justify-start">
+                {[
+                  { value: "general", label: "Général & Prix", icon: Tag },
+                  { value: "stock", label: "Stock & Lots", icon: Package },
+                  { value: "scale", label: "Balance & PLU", icon: Scale },
+                  { value: "cashier", label: "Caisse", icon: ShoppingCart },
+                ].map((tab) => (
+                  <TabsTrigger
+                    key={tab.value}
+                    value={tab.value}
+                    className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-3 py-2 text-xs font-medium gap-1.5"
+                  >
+                    <tab.icon className="h-3.5 w-3.5" />
+                    {tab.label}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-5 py-4">
+              {/* ─── TAB 1: General & Pricing ─── */}
+              <TabsContent value="general" className="mt-0 space-y-0">
+                {/* Identity */}
+                <SectionDivider label="Identité" />
+                <div className="grid grid-cols-2 gap-3">
                   <div className="col-span-2">
-                    <Label className="text-xs">Nom du produit</Label>
-                    <Input value={editingProduct.name} onChange={(e) => setEditingProduct((p) => ({ ...p, name: e.target.value }))} />
+                    <Label className="text-[11px] text-muted-foreground">Nom du produit</Label>
+                    <Input
+                      id="product-name-input"
+                      value={editingProduct.name}
+                      onChange={(e) => setEditingProduct((p) => ({ ...p, name: e.target.value }))}
+                      className="font-medium"
+                      tabIndex={1}
+                      autoFocus
+                    />
                   </div>
                   <div>
-                    <Label className="text-xs">Catégorie</Label>
+                    <Label className="text-[11px] text-muted-foreground">Catégorie</Label>
                     <Select value={editingProduct.category} onValueChange={(v) => setEditingProduct((p) => ({ ...p, category: v }))}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectTrigger tabIndex={2}><SelectValue /></SelectTrigger>
                       <SelectContent>
                         {["Alimentation", "Boissons", "Fruits", "Légumes", "Hygiène", "Autres"].map((c) => (
                           <SelectItem key={c} value={c}>{c}</SelectItem>
@@ -521,9 +571,18 @@ const ProductManagement = () => {
                     </Select>
                   </div>
                   <div>
-                    <Label className="text-xs">Unité</Label>
+                    <Label className="text-[11px] text-muted-foreground">Marque</Label>
+                    <Input
+                      value={editingProduct.brand}
+                      onChange={(e) => setEditingProduct((p) => ({ ...p, brand: e.target.value }))}
+                      placeholder="Optionnel"
+                      tabIndex={3}
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-[11px] text-muted-foreground">Unité</Label>
                     <Select value={editingProduct.unit} onValueChange={(v) => setEditingProduct((p) => ({ ...p, unit: v }))}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectTrigger tabIndex={4}><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="pcs">Pièce</SelectItem>
                         <SelectItem value="kg">Kilogramme</SelectItem>
@@ -532,46 +591,34 @@ const ProductManagement = () => {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div>
-                    <Label className="text-xs">Code PLU</Label>
-                    <Input value={editingProduct.plu} onChange={(e) => setEditingProduct((p) => ({ ...p, plu: e.target.value }))} placeholder="Ex: 001" />
-                  </div>
-                  <div className="flex items-end pb-1">
-                    <div className="flex items-center gap-2">
-                      <Checkbox
-                        checked={editingProduct.scaleEnabled}
-                        onCheckedChange={(c) => setEditingProduct((p) => ({ ...p, scaleEnabled: !!c }))}
-                      />
-                      <Label className="text-xs cursor-pointer">Balance électronique</Label>
-                    </div>
-                  </div>
                 </div>
-              </AccordionContent>
-            </AccordionItem>
 
-            {/* Barcodes */}
-            <AccordionItem value="barcodes" className="border rounded-lg px-3">
-              <AccordionTrigger className="text-sm font-semibold py-3 hover:no-underline">
-                <span className="flex items-center gap-2"><ScanBarcode className="h-4 w-4 text-primary" /> Codes-barres ({editingProduct.barcodes.filter(b => b).length})</span>
-              </AccordionTrigger>
-              <AccordionContent>
-                <div className="space-y-2 pb-2">
+                {/* Barcodes */}
+                <SectionDivider label="Codes-barres" />
+                <div className="space-y-2">
                   {editingProduct.barcodes.map((bc, i) => (
                     <div key={i} className="flex items-center gap-2">
-                      <Input
-                        value={bc}
-                        onChange={(e) => {
-                          const updated = [...editingProduct.barcodes];
-                          updated[i] = e.target.value;
-                          setEditingProduct((p) => ({ ...p, barcodes: updated }));
-                        }}
-                        placeholder="Code-barres"
-                        className="font-mono text-xs"
-                      />
+                      <div className="relative flex-1">
+                        <ScanBarcode className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                        <Input
+                          value={bc}
+                          onChange={(e) => {
+                            const updated = [...editingProduct.barcodes];
+                            updated[i] = e.target.value;
+                            setEditingProduct((p) => ({ ...p, barcodes: updated }));
+                          }}
+                          placeholder="Code-barres"
+                          className="font-mono text-xs pl-8"
+                          tabIndex={10 + i}
+                        />
+                      </div>
+                      <span className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                        {i === 0 ? "Principal" : `Alt ${i}`}
+                      </span>
                       {editingProduct.barcodes.length > 1 && (
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-accent" onClick={() => removeBarcode(i)}>
+                        <button onClick={() => removeBarcode(i)} className="p-1 rounded hover:bg-accent/10 text-accent">
                           <X className="h-3 w-3" />
-                        </Button>
+                        </button>
                       )}
                     </div>
                   ))}
@@ -582,65 +629,107 @@ const ProductManagement = () => {
                       placeholder="Ajouter un code-barres..."
                       className="font-mono text-xs"
                       onKeyDown={(e) => e.key === "Enter" && addBarcode()}
+                      tabIndex={20}
                     />
-                    <Button variant="outline" size="sm" onClick={addBarcode} className="text-xs">
+                    <Button variant="outline" size="sm" onClick={addBarcode} className="text-xs shrink-0">
                       <Plus className="h-3 w-3 mr-1" /> Ajouter
                     </Button>
                   </div>
                 </div>
-              </AccordionContent>
-            </AccordionItem>
 
-            {/* Pricing */}
-            <AccordionItem value="pricing" className="border rounded-lg px-3">
-              <AccordionTrigger className="text-sm font-semibold py-3 hover:no-underline">
-                <span className="flex items-center gap-2"><Tag className="h-4 w-4 text-primary" /> Tarification</span>
-              </AccordionTrigger>
-              <AccordionContent>
-                <div className="grid grid-cols-2 gap-3 pb-2">
+                {/* Buying Price */}
+                <SectionDivider label="Prix d'achat" />
+                <div className="grid grid-cols-3 gap-3">
                   <div>
-                    <Label className="text-xs">Prix de vente (DA)</Label>
-                    <Input type="number" value={editingProduct.price || ""} onChange={(e) => setEditingProduct((p) => ({ ...p, price: +e.target.value }))} />
+                    <Label className="text-[11px] text-muted-foreground">Taille du pack</Label>
+                    <Input type="number" min={1} value={editingProduct.packSize || ""} onChange={(e) => setEditingProduct((p) => ({ ...p, packSize: +e.target.value }))} placeholder="1" tabIndex={21} />
                   </div>
                   <div>
-                    <Label className="text-xs">Coût d'achat unitaire (DA)</Label>
-                    <Input type="number" value={editingProduct.cost || ""} onChange={(e) => setEditingProduct((p) => ({ ...p, cost: +e.target.value }))} />
+                    <Label className="text-[11px] text-muted-foreground">Prix d'achat pack (DA)</Label>
+                    <Input type="number" value={editingProduct.packBuyingPrice || ""} onChange={(e) => setEditingProduct((p) => ({ ...p, packBuyingPrice: +e.target.value }))} placeholder="0" tabIndex={22} />
                   </div>
                   <div>
-                    <Label className="text-xs">Taille du pack</Label>
-                    <Input type="number" min={1} value={editingProduct.packSize || ""} onChange={(e) => setEditingProduct((p) => ({ ...p, packSize: +e.target.value }))} placeholder="1" />
+                    <Label className="text-[11px] text-muted-foreground">Coût unitaire</Label>
+                    <Input
+                      value={unitCostFromPack !== null ? unitCostFromPack.toFixed(2) : editingProduct.cost || ""}
+                      onChange={(e) => { if (unitCostFromPack === null) setEditingProduct((p) => ({ ...p, cost: +e.target.value })); }}
+                      readOnly={unitCostFromPack !== null}
+                      className={unitCostFromPack !== null ? "bg-muted text-muted-foreground" : ""}
+                      tabIndex={23}
+                    />
                   </div>
-                  <div>
-                    <Label className="text-xs">Prix d'achat du pack (DA)</Label>
-                    <Input type="number" value={editingProduct.packBuyingPrice || ""} onChange={(e) => setEditingProduct((p) => ({ ...p, packBuyingPrice: +e.target.value }))} placeholder="0" />
-                  </div>
-                  {(unitCostFromPack || margin) && (
-                    <div className="col-span-2 bg-muted rounded-md p-3 flex gap-6 text-sm">
-                      {unitCostFromPack && (
-                        <div>
-                          <span className="text-xs text-muted-foreground">Coût unitaire calculé: </span>
-                          <span className="font-bold text-foreground">{unitCostFromPack} DA</span>
-                        </div>
-                      )}
-                      {margin && (
-                        <div>
-                          <span className="text-xs text-muted-foreground">Marge: </span>
-                          <span className={`font-bold ${parseFloat(margin) >= 0 ? "text-success" : "text-accent"}`}>{margin}%</span>
-                        </div>
-                      )}
-                    </div>
-                  )}
                 </div>
-              </AccordionContent>
-            </AccordionItem>
 
-            {/* Wholesale */}
-            <AccordionItem value="wholesale" className="border rounded-lg px-3">
-              <AccordionTrigger className="text-sm font-semibold py-3 hover:no-underline">
-                <span className="flex items-center gap-2"><Package className="h-4 w-4 text-primary" /> Vente en gros / par pack</span>
-              </AccordionTrigger>
-              <AccordionContent>
-                <div className="space-y-3 pb-2">
+                {/* Selling Price */}
+                <SectionDivider label="Prix de vente" />
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <Label className="text-[11px] text-muted-foreground">Prix de vente TTC (DA)</Label>
+                    <Input type="number" value={editingProduct.price || ""} onChange={(e) => setEditingProduct((p) => ({ ...p, price: +e.target.value }))} tabIndex={24} />
+                  </div>
+                  <div>
+                    <Label className="text-[11px] text-muted-foreground">Marge cible (%)</Label>
+                    <Input
+                      type="number"
+                      value={margin !== null ? margin.toFixed(1) : ""}
+                      onChange={(e) => setMarginValue(+e.target.value)}
+                      placeholder="—"
+                      tabIndex={25}
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-[11px] text-muted-foreground">Taux TVA</Label>
+                    <Select value={String(editingProduct.vatRate)} onValueChange={(v) => setEditingProduct((p) => ({ ...p, vatRate: +v }))}>
+                      <SelectTrigger tabIndex={26}><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="0">0%</SelectItem>
+                        <SelectItem value="9">9%</SelectItem>
+                        <SelectItem value="19">19%</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* Calculation Summary */}
+                {effectiveCost > 0 && editingProduct.price > 0 && (
+                  <div className="mt-3 bg-muted/60 border border-border rounded-lg p-3">
+                    <div className="grid grid-cols-3 gap-x-4 gap-y-2 text-xs">
+                      <div>
+                        <span className="text-muted-foreground">Coût unitaire</span>
+                        <p className="font-semibold text-foreground">{effectiveCost.toFixed(2)} DA</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Prix HT</span>
+                        <p className="font-semibold text-foreground">{priceHT.toFixed(2)} DA</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">TVA ({editingProduct.vatRate}%)</span>
+                        <p className="font-semibold text-foreground">{vatAmount.toFixed(2)} DA</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Prix TTC</span>
+                        <p className="font-semibold text-foreground">{editingProduct.price.toFixed(2)} DA</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Profit / unité</span>
+                        <p className={`font-semibold ${profitPerUnit >= 0 ? "text-success" : "text-accent"}`}>{profitPerUnit.toFixed(2)} DA</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Marge</span>
+                        <div className="flex items-center gap-1.5">
+                          <p className={`font-semibold ${(margin ?? 0) >= 0 ? "text-success" : "text-accent"}`}>{margin?.toFixed(1) ?? "—"}%</p>
+                          {marginBadge && (
+                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${marginBadge.cls}`}>{marginBadge.label}</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Wholesale */}
+                <SectionDivider label="Vente en gros" />
+                <div className="space-y-3">
                   <div className="flex items-center gap-3">
                     <Switch
                       checked={editingProduct.wholesaleEnabled}
@@ -649,163 +738,290 @@ const ProductManagement = () => {
                     <Label className="text-xs">Activer la vente en gros</Label>
                   </div>
                   {editingProduct.wholesaleEnabled && (
-                    <div className="grid grid-cols-2 gap-3 pt-1">
+                    <div className="grid grid-cols-3 gap-3">
                       <div>
-                        <Label className="text-xs">Prix de gros (DA)</Label>
-                        <Input type="number" value={editingProduct.wholesalePrice || ""} onChange={(e) => setEditingProduct((p) => ({ ...p, wholesalePrice: +e.target.value }))} />
+                        <Label className="text-[11px] text-muted-foreground">Qté minimum</Label>
+                        <Input type="number" value={editingProduct.wholesaleMinQty || ""} onChange={(e) => setEditingProduct((p) => ({ ...p, wholesaleMinQty: +e.target.value }))} tabIndex={30} />
                       </div>
                       <div>
-                        <Label className="text-xs">Quantité minimum</Label>
-                        <Input type="number" value={editingProduct.wholesaleMinQty || ""} onChange={(e) => setEditingProduct((p) => ({ ...p, wholesaleMinQty: +e.target.value }))} />
+                        <Label className="text-[11px] text-muted-foreground">Prix de gros (DA)</Label>
+                        <Input type="number" value={editingProduct.wholesalePrice || ""} onChange={(e) => setEditingProduct((p) => ({ ...p, wholesalePrice: +e.target.value }))} tabIndex={31} />
                       </div>
-                      <div className="col-span-2 bg-muted rounded-md p-2.5 text-xs text-muted-foreground">
-                        💡 Le prix de gros sera appliqué automatiquement à la caisse quand la quantité atteint {editingProduct.wholesaleMinQty || "..."} unités.
+                      <div>
+                        <Label className="text-[11px] text-muted-foreground">Marge gros</Label>
+                        <Input
+                          value={effectiveCost > 0 && editingProduct.wholesalePrice > 0 ? `${(((editingProduct.wholesalePrice - effectiveCost) / effectiveCost) * 100).toFixed(1)}%` : "—"}
+                          readOnly
+                          className="bg-muted text-muted-foreground"
+                        />
                       </div>
                     </div>
                   )}
                 </div>
-              </AccordionContent>
-            </AccordionItem>
 
-            {/* Stock & Expiration */}
-            <AccordionItem value="stock" className="border rounded-lg px-3">
-              <AccordionTrigger className="text-sm font-semibold py-3 hover:no-underline">
-                <span className="flex items-center gap-2">
-                  <Calendar className="h-4 w-4 text-primary" /> Stock & Dates d'expiration
-                  {editingProduct.expirationDates.length > 0 && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-warning/10 text-warning font-medium">
-                      {editingProduct.expirationDates.length}
-                    </span>
+                {/* Pack Selling Variants */}
+                <SectionDivider label="Variantes de vente par pack" />
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Switch
+                        checked={editingProduct.packVariants.length > 0}
+                        onCheckedChange={(c) => {
+                          if (c && editingProduct.packVariants.length === 0) addPackVariant();
+                          else if (!c) setEditingProduct((p) => ({ ...p, packVariants: [] }));
+                        }}
+                      />
+                      <Label className="text-xs">Activer les packs de vente</Label>
+                    </div>
+                    {editingProduct.packVariants.length > 0 && (
+                      <Button variant="outline" size="sm" onClick={addPackVariant} className="text-xs h-7">
+                        <Plus className="h-3 w-3 mr-1" /> Ajouter
+                      </Button>
+                    )}
+                  </div>
+                  {editingProduct.packVariants.length > 0 && (
+                    <>
+                      <div className="space-y-2">
+                        {editingProduct.packVariants.map((v, i) => (
+                          <div key={i} className="flex items-center gap-2">
+                            <div className="w-16">
+                              <Input type="number" min={2} value={v.size || ""} onChange={(e) => updatePackVariant(i, "size", +e.target.value)} placeholder="Qté" className="text-xs" />
+                            </div>
+                            <div className="flex-1">
+                              <Input value={v.name} onChange={(e) => updatePackVariant(i, "name", e.target.value)} placeholder={`Pack de ${v.size}`} className="text-xs" />
+                            </div>
+                            <div className="w-24">
+                              <Input type="number" value={v.price || ""} onChange={(e) => updatePackVariant(i, "price", +e.target.value)} placeholder="Prix DA" className="text-xs" />
+                            </div>
+                            <button onClick={() => removePackVariant(i)} className="p-1 rounded hover:bg-accent/10 text-accent">
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex items-center gap-2 p-2 bg-muted/50 rounded border border-border text-[10px] text-muted-foreground">
+                        <Info className="h-3.5 w-3.5 shrink-0" />
+                        <span>À la caisse, appuyez sur <KBD>F8</KBD> pour basculer entre les tailles de pack en ordre croissant.</span>
+                      </div>
+                    </>
                   )}
-                </span>
-              </AccordionTrigger>
-              <AccordionContent>
-                <div className="space-y-3 pb-2">
+                </div>
+              </TabsContent>
+
+              {/* ─── TAB 2: Stock & Batches ─── */}
+              <TabsContent value="stock" className="mt-0 space-y-0">
+                <SectionDivider label="Niveaux de stock" />
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-[11px] text-muted-foreground">Stock actuel</Label>
+                    <Input type="number" value={editingProduct.stock || ""} onChange={(e) => setEditingProduct((p) => ({ ...p, stock: +e.target.value }))} tabIndex={1} autoFocus />
+                  </div>
+                  <div>
+                    <Label className="text-[11px] text-muted-foreground">Seuil minimum</Label>
+                    <Input type="number" value={editingProduct.minStock || ""} onChange={(e) => setEditingProduct((p) => ({ ...p, minStock: +e.target.value }))} tabIndex={2} />
+                  </div>
+                </div>
+
+                <SectionDivider label="Fournisseur" />
+                <div>
+                  <Label className="text-[11px] text-muted-foreground">Fournisseur principal</Label>
+                  <Input value={editingProduct.supplier} onChange={(e) => setEditingProduct((p) => ({ ...p, supplier: e.target.value }))} placeholder="Nom du fournisseur" tabIndex={3} />
+                </div>
+
+                <SectionDivider label="Lots & dates d'expiration" />
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-medium">Suivi des lots</Label>
+                    <Button variant="outline" size="sm" onClick={addExpiration} className="h-7 text-xs">
+                      <Plus className="h-3 w-3 mr-1" /> Ajouter un lot
+                    </Button>
+                  </div>
+                  {editingProduct.expirationDates.length === 0 && (
+                    <p className="text-xs text-muted-foreground italic">Aucune date d'expiration enregistrée</p>
+                  )}
+                  <div className="space-y-2">
+                    {editingProduct.expirationDates.map((exp, i) => {
+                      const days = exp.date ? daysUntil(exp.date) : null;
+                      return (
+                        <div key={i} className="flex items-center gap-2">
+                          <Input type="date" value={exp.date} onChange={(e) => updateExpiration(i, "date", e.target.value)} className="text-xs" />
+                          <Input type="number" value={exp.quantity || ""} onChange={(e) => updateExpiration(i, "quantity", +e.target.value)} placeholder="Qté" className="w-20 text-xs" />
+                          {days !== null && days >= 0 && days <= 30 && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-warning/10 text-warning font-medium whitespace-nowrap">{days}j</span>
+                          )}
+                          {days !== null && days < 0 && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent/10 text-accent font-medium whitespace-nowrap">Expiré</span>
+                          )}
+                          <button onClick={() => removeExpiration(i)} className="p-1 rounded hover:bg-accent/10 text-accent">
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </TabsContent>
+
+              {/* ─── TAB 3: Scale & PLU ─── */}
+              <TabsContent value="scale" className="mt-0 space-y-0">
+                <SectionDivider label="Balance électronique" />
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <Switch
+                      checked={editingProduct.scaleEnabled}
+                      onCheckedChange={(c) => setEditingProduct((p) => ({ ...p, scaleEnabled: !!c }))}
+                    />
+                    <Label className="text-xs">Activer la pesée</Label>
+                  </div>
+
+                  {editingProduct.scaleEnabled && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label className="text-[11px] text-muted-foreground">Code PLU</Label>
+                        <Input value={editingProduct.plu} onChange={(e) => setEditingProduct((p) => ({ ...p, plu: e.target.value }))} placeholder="Ex: 001" tabIndex={1} autoFocus />
+                      </div>
+                      <div>
+                        <Label className="text-[11px] text-muted-foreground">Tare (kg)</Label>
+                        <Input type="number" step="0.001" value={editingProduct.tareWeight || ""} onChange={(e) => setEditingProduct((p) => ({ ...p, tareWeight: +e.target.value }))} placeholder="0.000" tabIndex={2} />
+                      </div>
+                      <div>
+                        <Label className="text-[11px] text-muted-foreground">Format d'étiquette</Label>
+                        <Select value={editingProduct.labelFormat} onValueChange={(v) => setEditingProduct((p) => ({ ...p, labelFormat: v }))}>
+                          <SelectTrigger tabIndex={3}><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="standard">Standard</SelectItem>
+                            <SelectItem value="compact">Compact</SelectItem>
+                            <SelectItem value="detailed">Détaillé</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="flex items-end">
+                        <div className="flex items-center gap-3">
+                          <Switch
+                            checked={editingProduct.isActive}
+                            onCheckedChange={(c) => setEditingProduct((p) => ({ ...p, isActive: c }))}
+                          />
+                          <Label className="text-xs">Actif sur la balance</Label>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {!editingProduct.scaleEnabled && (
+                    <div className="p-4 bg-muted/50 rounded-lg border border-border text-center">
+                      <Scale className="h-8 w-8 text-muted-foreground/40 mx-auto mb-2" />
+                      <p className="text-xs text-muted-foreground">Activez la pesée pour configurer le PLU et les paramètres de balance</p>
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
+
+              {/* ─── TAB 4: Cashier Settings ─── */}
+              <TabsContent value="cashier" className="mt-0 space-y-0">
+                <SectionDivider label="Raccourci caisse" />
+                <div className="space-y-4">
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <Label className="text-xs">Stock actuel</Label>
-                      <Input type="number" value={editingProduct.stock || ""} onChange={(e) => setEditingProduct((p) => ({ ...p, stock: +e.target.value }))} />
+                      <Label className="text-[11px] text-muted-foreground">Libellé court</Label>
+                      <Input
+                        value={editingProduct.shortLabel}
+                        onChange={(e) => setEditingProduct((p) => ({ ...p, shortLabel: e.target.value }))}
+                        placeholder={editingProduct.name.slice(0, 12) || "Ex: LAIT"}
+                        maxLength={12}
+                        tabIndex={1}
+                        autoFocus
+                      />
                     </div>
                     <div>
-                      <Label className="text-xs">Stock minimum</Label>
-                      <Input type="number" value={editingProduct.minStock || ""} onChange={(e) => setEditingProduct((p) => ({ ...p, minStock: +e.target.value }))} />
+                      <Label className="text-[11px] text-muted-foreground">Couleur du bouton</Label>
+                      <Select value={editingProduct.buttonColor} onValueChange={(v) => setEditingProduct((p) => ({ ...p, buttonColor: v }))}>
+                        <SelectTrigger tabIndex={2}>
+                          <div className="flex items-center gap-2">
+                            {editingProduct.buttonColor && <span className={`w-3 h-3 rounded-full ${editingProduct.buttonColor}`} />}
+                            <SelectValue placeholder="Par défaut" />
+                          </div>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {BUTTON_COLORS.map((c) => (
+                            <SelectItem key={c.value} value={c.value || "default"}>
+                              <div className="flex items-center gap-2">
+                                {c.value && <span className={`w-3 h-3 rounded-full ${c.value}`} />}
+                                {c.label}
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
 
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <Label className="text-xs font-medium">Lots et dates d'expiration</Label>
-                      <Button variant="outline" size="sm" onClick={addExpiration} className="h-7 text-xs">
-                        <Plus className="h-3 w-3 mr-1" /> Ajouter un lot
-                      </Button>
+                  {/* Preview */}
+                  {editingProduct.shortLabel && (
+                    <div className="flex items-center gap-3">
+                      <span className="text-[11px] text-muted-foreground">Aperçu:</span>
+                      <button className={`flex items-center gap-2 px-3 py-2 border border-border rounded text-left ${editingProduct.buttonColor || "bg-card"}`}>
+                        <span className={`w-3 h-3 rounded-full ${editingProduct.buttonColor || "bg-muted"} shrink-0`} />
+                        <span className="text-[11px] font-medium text-foreground">{editingProduct.shortLabel}</span>
+                      </button>
                     </div>
-                    {editingProduct.expirationDates.length === 0 && (
-                      <p className="text-xs text-muted-foreground italic">Aucune date d'expiration enregistrée</p>
-                    )}
-                    <div className="space-y-2">
-                      {editingProduct.expirationDates.map((exp, i) => {
-                        const days = exp.date ? daysUntil(exp.date) : null;
-                        return (
-                          <div key={i} className="flex items-center gap-2">
-                            <Input
-                              type="date"
-                              value={exp.date}
-                              onChange={(e) => updateExpiration(i, "date", e.target.value)}
-                              className="text-xs"
-                            />
-                            <Input
-                              type="number"
-                              value={exp.quantity || ""}
-                              onChange={(e) => updateExpiration(i, "quantity", +e.target.value)}
-                              placeholder="Qté"
-                              className="w-20 text-xs"
-                            />
-                            {days !== null && days <= 30 && days >= 0 && (
-                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-warning/10 text-warning font-medium whitespace-nowrap">
-                                {days}j
-                              </span>
-                            )}
-                            {days !== null && days < 0 && (
-                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent/10 text-accent font-medium whitespace-nowrap">
-                                Expiré
-                              </span>
-                            )}
-                            <Button variant="ghost" size="icon" className="h-7 w-7 text-accent" onClick={() => removeExpiration(i)}>
-                              <X className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        );
-                      })}
+                  )}
+                </div>
+
+                <SectionDivider label="Options de caisse" />
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between p-3 bg-muted/40 rounded-lg border border-border">
+                    <div>
+                      <Label className="text-xs font-medium">Modification du prix</Label>
+                      <p className="text-[10px] text-muted-foreground">Autoriser le caissier à modifier le prix</p>
                     </div>
+                    <Switch
+                      checked={editingProduct.allowPriceOverride}
+                      onCheckedChange={(c) => setEditingProduct((p) => ({ ...p, allowPriceOverride: c }))}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between p-3 bg-muted/40 rounded-lg border border-border">
+                    <div>
+                      <Label className="text-xs font-medium">Produit actif</Label>
+                      <p className="text-[10px] text-muted-foreground">Désactiver pour masquer ce produit à la caisse</p>
+                    </div>
+                    <Switch
+                      checked={editingProduct.isActive}
+                      onCheckedChange={(c) => setEditingProduct((p) => ({ ...p, isActive: c }))}
+                    />
                   </div>
                 </div>
-              </AccordionContent>
-            </AccordionItem>
-          </Accordion>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowProductDialog(false)}>
-              <X className="h-4 w-4 mr-1" /> Annuler
-            </Button>
-            <Button onClick={saveProduct} className="bg-primary text-primary-foreground">
-              <Save className="h-4 w-4 mr-1" /> Enregistrer
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Purchase Dialog */}
-      <Dialog open={showPurchaseDialog} onOpenChange={setShowPurchaseDialog}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Nouvel achat</DialogTitle>
-            <DialogDescription className="sr-only">Formulaire pour enregistrer un nouvel achat de produit.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <Label>Produit</Label>
-              <Select value={purchaseForm.productId} onValueChange={(v) => {
-                const p = products.find((x) => x.id === v);
-                setPurchaseForm((f) => ({ ...f, productId: v, unitCost: p?.cost || f.unitCost }));
-              }}>
-                <SelectTrigger><SelectValue placeholder="Sélectionner un produit" /></SelectTrigger>
-                <SelectContent>
-                  {products
-                    .filter((p, i) => p.id === purchaseForm.productId || i < 50)
-                    .map((p) => (
-                      <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground mt-1">
-                Produit absent ? <button onClick={() => { setShowPurchaseDialog(false); openNewProduct(); }} className="text-info underline">Créer un nouveau produit</button>
-              </p>
+              </TabsContent>
             </div>
-            <div>
-              <Label>Fournisseur</Label>
-              <Input value={purchaseForm.supplier} onChange={(e) => setPurchaseForm((f) => ({ ...f, supplier: e.target.value }))} />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Quantité</Label>
-                <Input type="number" value={purchaseForm.quantity} onChange={(e) => setPurchaseForm((f) => ({ ...f, quantity: +e.target.value }))} />
+
+            {/* Footer */}
+            <div className="px-5 py-3 border-t border-border flex items-center justify-between bg-muted/30">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-muted-foreground font-medium">
+                  Onglet {formTabIndex + 1} / {formTabCount}
+                </span>
+                <KBD>Ctrl+S</KBD>
               </div>
-              <div>
-                <Label>Coût unitaire (DA)</Label>
-                <Input type="number" value={purchaseForm.unitCost} onChange={(e) => setPurchaseForm((f) => ({ ...f, unitCost: +e.target.value }))} />
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={() => setShowProductDialog(false)} className="text-xs">
+                  Annuler
+                </Button>
+                {canGoBack && (
+                  <Button variant="outline" size="sm" onClick={goBack} className="text-xs">
+                    Précédent
+                  </Button>
+                )}
+                {canGoNext ? (
+                  <Button size="sm" onClick={goNext} className="text-xs bg-primary text-primary-foreground">
+                    Suivant
+                  </Button>
+                ) : (
+                  <Button size="sm" onClick={saveProduct} className="text-xs bg-primary text-primary-foreground">
+                    <Save className="h-3.5 w-3.5 mr-1" /> Enregistrer
+                  </Button>
+                )}
               </div>
             </div>
-            <div className="bg-muted rounded-md p-3 text-sm">
-              <span className="text-muted-foreground">Total: </span>
-              <span className="font-bold text-foreground">{(purchaseForm.quantity * purchaseForm.unitCost).toLocaleString()} DA</span>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowPurchaseDialog(false)}>Annuler</Button>
-            <Button onClick={savePurchase} disabled={!purchaseForm.productId || purchaseForm.quantity <= 0} className="bg-primary text-primary-foreground">
-              <Save className="h-4 w-4 mr-1" /> Enregistrer l'achat
-            </Button>
-          </DialogFooter>
+          </Tabs>
         </DialogContent>
       </Dialog>
     </div>
