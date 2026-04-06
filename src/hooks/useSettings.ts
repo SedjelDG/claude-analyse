@@ -32,6 +32,7 @@ export interface AppSettings {
     printer: { enabled: boolean; port: string; type: string };
     scanner: { enabled: boolean; port: string; type: string };
     scale: { enabled: boolean; port: string; type: string; brand: string };
+    barcodeScale: { enabled: boolean; prefix: string };
   };
 }
 
@@ -46,6 +47,7 @@ const defaultSettings: AppSettings = {
     printer: { enabled: false, port: "", type: "thermal" },
     scanner: { enabled: false, port: "", type: "usb" },
     scale: { enabled: false, port: "", type: "serial", brand: "" },
+    barcodeScale: { enabled: true, prefix: "20" },
   },
 };
 

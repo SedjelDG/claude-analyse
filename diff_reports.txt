@@ -1,0 +1,375 @@
+﻿diff --git a/src/pages/management/Reports.tsx b/src/pages/management/Reports.tsx
+index 4790cf0..dd73083 100644
+--- a/src/pages/management/Reports.tsx
++++ b/src/pages/management/Reports.tsx
+@@ -1,13 +1,16 @@
+ import { useState } from "react";
+-import { motion } from "framer-motion";
++import { motion, AnimatePresence } from "framer-motion";
+ import {
+   DollarSign, ShoppingCart, TrendingUp, Receipt,
+-  BarChart3
++  BarChart3, X, FileText, Package, Banknote, Users, Truck,
++  ArrowRight
+ } from "lucide-react";
+ import {
+   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+   BarChart, Bar
+ } from "recharts";
++import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
++import { ScrollArea } from "@/components/ui/scroll-area";
+ 
+ type Period = "daily" | "weekly" | "monthly" | "yearly";
+ 
+@@ -18,7 +21,6 @@ const periodLabels: Record<Period, string> = {
+   yearly: "Annuel",
+ };
+ 
+-// Mock data per period
+ const mockData: Record<Period, { label: string; sales: number; profit: number }[]> = {
+   daily: [
+     { label: "08h", sales: 4200, profit: 1260 }, { label: "09h", sales: 8500, profit: 2550 },
+@@ -48,6 +50,47 @@ const mockData: Record<Period, { label: string; sales: number; profit: number }[
+   ],
+ };
+ 
++// Mock transactions for detailed reports
++const mockTransactions = [
++  { id: "T001", date: "2026-03-23 09:15", items: "Lait 1L x2, Pain x3", total: 350, cashier: "Ahmed", method: "Esp├¿ces" },
++  { id: "T002", date: "2026-03-23 09:32", items: "Eau 1.5L x6, Sucre 1kg", total: 250, cashier: "Ahmed", method: "Carte" },
++  { id: "T003", date: "2026-03-23 10:05", items: "Fromage 0.5kg", total: 400, cashier: "Seddik", method: "Esp├¿ces" },
++  { id: "T004", date: "2026-03-23 10:22", items: "Pommes 2kg, Bananes 1kg", total: 850, cashier: "Ahmed", method: "Esp├¿ces" },
++  { id: "T005", date: "2026-03-23 11:10", items: "Olives 0.3kg, Pain x2", total: 250, cashier: "Seddik", method: "Carte" },
++  { id: "T006", date: "2026-03-23 12:01", items: "Lait 1L x6 (Pack)", total: 550, cashier: "Ahmed", method: "Esp├¿ces" },
++];
++
++const mockTopProducts = [
++  { name: "Lait 1L", qty: 245, revenue: 24500, margin: 20 },
++  { name: "Pain", qty: 380, revenue: 19000, margin: 30 },
++  { name: "Eau 1.5L", qty: 420, revenue: 10500, margin: 28 },
++  { name: "Sucre 1kg", qty: 85, revenue: 8500, margin: 15 },
++  { name: "Fromage", qty: 32, revenue: 25600, margin: 25 },
++];
++
++const mockSlowProducts = [
++  { name: "Olives", qty: 5, revenue: 2500, lastSold: "2026-03-21" },
++  { name: "Bananes", qty: 8, revenue: 2800, lastSold: "2026-03-22" },
++];
++
++interface ReportCardDef {
++  id: string;
++  title: string;
++  description: string;
++  icon: typeof FileText;
++  color: string;
++}
++
++const reportCards: ReportCardDef[] = [
++  { id: "sales_detail", title: "D├®tails des ventes", description: "Ventes par p├®riode avec marges", icon: BarChart3, color: "text-primary" },
++  { id: "transactions", title: "Toutes les transactions", description: "Chaque vente avec articles, caissier et mode de paiement", icon: Receipt, color: "text-info" },
++  { id: "top_products", title: "Produits les plus vendus", description: "Classement par quantit├® et chiffre d'affaires", icon: TrendingUp, color: "text-success" },
++  { id: "slow_products", title: "Produits les moins vendus", description: "Articles ├á faible rotation", icon: Package, color: "text-warning" },
++  { id: "margins", title: "Marges par produit", description: "Analyse des marges b├®n├®ficiaires", icon: DollarSign, color: "text-primary" },
++  { id: "cash_report", title: "Rapport de caisse", description: "Mouvements d'esp├¿ces et soldes", icon: Banknote, color: "text-accent" },
++  { id: "supplier_report", title: "Rapport fournisseurs", description: "Achats par fournisseur et p├®riode", icon: Truck, color: "text-info" },
++];
++
+ const anim = (i: number) => ({
+   initial: { opacity: 0, y: 12 },
+   animate: { opacity: 1, y: 0 },
+@@ -58,6 +101,7 @@ const fmt = (n: number) => n >= 1000000 ? `${(n / 1000000).toFixed(1)}M` : n >=
+ 
+ const Reports = () => {
+   const [period, setPeriod] = useState<Period>("daily");
++  const [activeReport, setActiveReport] = useState<string | null>(null);
+   const data = mockData[period];
+ 
+   const totalSales = data.reduce((s, d) => s + d.sales, 0);
+@@ -72,6 +116,166 @@ const Reports = () => {
+     { label: "Ticket moyen", value: `${avgTicket.toFixed(0)} DA`, icon: Receipt, color: "text-warning" },
+   ];
+ 
++  const renderReportContent = (id: string) => {
++    switch (id) {
++      case "sales_detail":
++        return (
++          <table className="w-full text-sm">
++            <thead>
++              <tr className="bg-muted border-b border-border">
++                <th className="px-4 py-2 text-left text-[10px] font-bold uppercase tracking-wider text-foreground">P├®riode</th>
++                <th className="px-4 py-2 text-right text-[10px] font-bold uppercase tracking-wider text-foreground">Ventes</th>
++                <th className="px-4 py-2 text-right text-[10px] font-bold uppercase tracking-wider text-foreground">B├®n├®fice</th>
++                <th className="px-4 py-2 text-right text-[10px] font-bold uppercase tracking-wider text-foreground">Marge</th>
++              </tr>
++            </thead>
++            <tbody className="divide-y divide-border">
++              {data.map((d, i) => (
++                <tr key={d.label} className={i % 2 === 0 ? "bg-card" : "bg-muted/20"}>
++                  <td className="px-4 py-2.5 font-medium text-foreground">{d.label}</td>
++                  <td className="px-4 py-2.5 text-right text-foreground">{d.sales.toLocaleString()} DA</td>
++                  <td className="px-4 py-2.5 text-right text-success font-medium">{d.profit.toLocaleString()} DA</td>
++                  <td className="px-4 py-2.5 text-right text-muted-foreground">{((d.profit / d.sales) * 100).toFixed(1)}%</td>
++                </tr>
++              ))}
++            </tbody>
++            <tfoot>
++              <tr className="bg-primary text-primary-foreground font-bold">
++                <td className="px-4 py-2.5">Total</td>
++                <td className="px-4 py-2.5 text-right">{totalSales.toLocaleString()} DA</td>
++                <td className="px-4 py-2.5 text-right">{totalProfit.toLocaleString()} DA</td>
++                <td className="px-4 py-2.5 text-right">{((totalProfit / totalSales) * 100).toFixed(1)}%</td>
++              </tr>
++            </tfoot>
++          </table>
++        );
++
++      case "transactions":
++        return (
++          <table className="w-full text-sm">
++            <thead>
++              <tr className="bg-muted border-b border-border">
++                <th className="px-3 py-2 text-left text-[10px] font-bold uppercase">R├®f</th>
++                <th className="px-3 py-2 text-left text-[10px] font-bold uppercase">Date</th>
++                <th className="px-3 py-2 text-left text-[10px] font-bold uppercase">Articles</th>
++                <th className="px-3 py-2 text-left text-[10px] font-bold uppercase">Caissier</th>
++                <th className="px-3 py-2 text-left text-[10px] font-bold uppercase">Paiement</th>
++                <th className="px-3 py-2 text-right text-[10px] font-bold uppercase">Total</th>
++              </tr>
++            </thead>
++            <tbody className="divide-y divide-border">
++              {mockTransactions.map((t, i) => (
++                <tr key={t.id} className={i % 2 === 0 ? "bg-card" : "bg-muted/20"}>
++                  <td className="px-3 py-2 font-mono text-xs text-muted-foreground">{t.id}</td>
++                  <td className="px-3 py-2 text-muted-foreground">{t.date}</td>
++                  <td className="px-3 py-2 text-foreground">{t.items}</td>
++                  <td className="px-3 py-2 text-foreground">{t.cashier}</td>
++                  <td className="px-3 py-2">
++                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${t.method === "Esp├¿ces" ? "bg-success/10 text-success" : "bg-info/10 text-info"}`}>
++                      {t.method}
++                    </span>
++                  </td>
++                  <td className="px-3 py-2 text-right font-semibold text-foreground">{t.total.toLocaleString()} DA</td>
++                </tr>
++              ))}
++            </tbody>
++          </table>
++        );
++
++      case "top_products":
++        return (
++          <table className="w-full text-sm">
++            <thead>
++              <tr className="bg-muted border-b border-border">
++                <th className="px-3 py-2 text-left text-[10px] font-bold uppercase">#</th>
++                <th className="px-3 py-2 text-left text-[10px] font-bold uppercase">Produit</th>
++                <th className="px-3 py-2 text-right text-[10px] font-bold uppercase">Qt├® vendue</th>
++                <th className="px-3 py-2 text-right text-[10px] font-bold uppercase">CA</th>
++                <th className="px-3 py-2 text-right text-[10px] font-bold uppercase">Marge</th>
++              </tr>
++            </thead>
++            <tbody className="divide-y divide-border">
++              {mockTopProducts.map((p, i) => (
++                <tr key={p.name} className={i % 2 === 0 ? "bg-card" : "bg-muted/20"}>
++                  <td className="px-3 py-2 font-bold text-primary">{i + 1}</td>
++                  <td className="px-3 py-2 font-medium text-foreground">{p.name}</td>
++                  <td className="px-3 py-2 text-right text-foreground">{p.qty}</td>
++                  <td className="px-3 py-2 text-right font-semibold text-foreground">{p.revenue.toLocaleString()} DA</td>
++                  <td className="px-3 py-2 text-right text-success">{p.margin}%</td>
++                </tr>
++              ))}
++            </tbody>
++          </table>
++        );
++
++      case "slow_products":
++        return (
++          <table className="w-full text-sm">
++            <thead>
++              <tr className="bg-muted border-b border-border">
++                <th className="px-3 py-2 text-left text-[10px] font-bold uppercase">Produit</th>
++                <th className="px-3 py-2 text-right text-[10px] font-bold uppercase">Qt├® vendue</th>
++                <th className="px-3 py-2 text-right text-[10px] font-bold uppercase">CA</th>
++                <th className="px-3 py-2 text-right text-[10px] font-bold uppercase">Derni├¿re vente</th>
++              </tr>
++            </thead>
++            <tbody className="divide-y divide-border">
++              {mockSlowProducts.map((p, i) => (
++                <tr key={p.name} className={i % 2 === 0 ? "bg-card" : "bg-muted/20"}>
++                  <td className="px-3 py-2 font-medium text-foreground">{p.name}</td>
++                  <td className="px-3 py-2 text-right text-warning font-semibold">{p.qty}</td>
++                  <td className="px-3 py-2 text-right text-foreground">{p.revenue.toLocaleString()} DA</td>
++                  <td className="px-3 py-2 text-right text-muted-foreground">{p.lastSold}</td>
++                </tr>
++              ))}
++            </tbody>
++          </table>
++        );
++
++      case "margins":
++        return (
++          <table className="w-full text-sm">
++            <thead>
++              <tr className="bg-muted border-b border-border">
++                <th className="px-3 py-2 text-left text-[10px] font-bold uppercase">Produit</th>
++                <th className="px-3 py-2 text-right text-[10px] font-bold uppercase">Co├╗t</th>
++                <th className="px-3 py-2 text-right text-[10px] font-bold uppercase">Prix</th>
++                <th className="px-3 py-2 text-right text-[10px] font-bold uppercase">Marge</th>
++                <th className="px-3 py-2 text-right text-[10px] font-bold uppercase">Profit total</th>
++              </tr>
++            </thead>
++            <tbody className="divide-y divide-border">
++              {mockTopProducts.map((p, i) => {
++                const cost = p.revenue * (1 - p.margin / 100);
++                return (
++                  <tr key={p.name} className={i % 2 === 0 ? "bg-card" : "bg-muted/20"}>
++                    <td className="px-3 py-2 font-medium text-foreground">{p.name}</td>
++                    <td className="px-3 py-2 text-right text-muted-foreground">{Math.round(cost / p.qty)} DA</td>
++                    <td className="px-3 py-2 text-right text-foreground">{Math.round(p.revenue / p.qty)} DA</td>
++                    <td className="px-3 py-2 text-right">
++                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${p.margin >= 20 ? "bg-success/10 text-success" : p.margin >= 10 ? "bg-warning/10 text-warning" : "bg-destructive/10 text-destructive"}`}>
++                        {p.margin}%
++                      </span>
++                    </td>
++                    <td className="px-3 py-2 text-right font-semibold text-success">{Math.round(p.revenue * p.margin / 100).toLocaleString()} DA</td>
++                  </tr>
++                );
++              })}
++            </tbody>
++          </table>
++        );
++
++      default:
++        return (
++          <div className="flex items-center justify-center py-12 text-muted-foreground">
++            <p className="text-sm">Donn├®es bient├┤t disponibles</p>
++          </div>
++        );
++    }
++  };
++
++  const activeReportDef = reportCards.find((r) => r.id === activeReport);
++
+   return (
+     <div className="space-y-6">
+       <div className="flex items-center justify-between">
+@@ -112,15 +316,15 @@ const Reports = () => {
+             <AreaChart data={data}>
+               <defs>
+                 <linearGradient id="salesGrad2" x1="0" y1="0" x2="0" y2="1">
+-                  <stop offset="0%" stopColor="hsl(222, 62%, 18%)" stopOpacity={0.3} />
+-                  <stop offset="100%" stopColor="hsl(222, 62%, 18%)" stopOpacity={0} />
++                  <stop offset="0%" stopColor="hsl(24, 85%, 48%)" stopOpacity={0.3} />
++                  <stop offset="100%" stopColor="hsl(24, 85%, 48%)" stopOpacity={0} />
+                 </linearGradient>
+               </defs>
+-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(220, 13%, 87%)" />
+-              <XAxis dataKey="label" tick={{ fontSize: 11 }} stroke="hsl(220, 9%, 46%)" />
+-              <YAxis tick={{ fontSize: 11 }} stroke="hsl(220, 9%, 46%)" tickFormatter={fmt} />
++              <CartesianGrid strokeDasharray="3 3" stroke="hsl(35, 13%, 87%)" />
++              <XAxis dataKey="label" tick={{ fontSize: 11 }} stroke="hsl(30, 9%, 46%)" />
++              <YAxis tick={{ fontSize: 11 }} stroke="hsl(30, 9%, 46%)" tickFormatter={fmt} />
+               <Tooltip formatter={(v: number) => `${v.toLocaleString()} DA`} />
+-              <Area type="monotone" dataKey="sales" stroke="hsl(222, 62%, 18%)" fill="url(#salesGrad2)" strokeWidth={2} name="Ventes" />
++              <Area type="monotone" dataKey="sales" stroke="hsl(24, 85%, 48%)" fill="url(#salesGrad2)" strokeWidth={2} name="Ventes" />
+             </AreaChart>
+           </ResponsiveContainer>
+         </motion.div>
+@@ -132,9 +336,9 @@ const Reports = () => {
+           </div>
+           <ResponsiveContainer width="100%" height={280}>
+             <BarChart data={data}>
+-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(220, 13%, 87%)" />
+-              <XAxis dataKey="label" tick={{ fontSize: 11 }} stroke="hsl(220, 9%, 46%)" />
+-              <YAxis tick={{ fontSize: 11 }} stroke="hsl(220, 9%, 46%)" tickFormatter={fmt} />
++              <CartesianGrid strokeDasharray="3 3" stroke="hsl(35, 13%, 87%)" />
++              <XAxis dataKey="label" tick={{ fontSize: 11 }} stroke="hsl(30, 9%, 46%)" />
++              <YAxis tick={{ fontSize: 11 }} stroke="hsl(30, 9%, 46%)" tickFormatter={fmt} />
+               <Tooltip formatter={(v: number) => `${v.toLocaleString()} DA`} />
+               <Bar dataKey="profit" fill="hsl(142, 71%, 35%)" radius={[2, 2, 0, 0]} name="B├®n├®fice" />
+             </BarChart>
+@@ -142,40 +346,52 @@ const Reports = () => {
+         </motion.div>
+       </div>
+ 
+-      {/* Data table */}
+-      <motion.div {...anim(6)} className="pos-card">
+-        <div className="px-4 py-3 border-b border-border">
+-          <h3 className="font-semibold text-foreground">D├®tails ÔÇö {periodLabels[period]}</h3>
++      {/* Report Catalog */}
++      <div>
++        <h3 className="text-lg font-bold text-foreground mb-3">Catalogue de rapports</h3>
++        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
++          {reportCards.map((card, i) => (
++            <motion.button
++              key={card.id}
++              {...anim(6 + i)}
++              onClick={() => setActiveReport(card.id)}
++              className="pos-card p-4 text-left hover:bg-muted/50 transition-all group"
++            >
++              <div className="flex items-start justify-between">
++                <div className={`p-2 rounded-lg bg-muted ${card.color}`}>
++                  <card.icon className="h-4 w-4" />
++                </div>
++                <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
++              </div>
++              <h4 className="font-semibold text-foreground text-sm mt-3">{card.title}</h4>
++              <p className="text-[11px] text-muted-foreground mt-1">{card.description}</p>
++            </motion.button>
++          ))}
+         </div>
+-        <table className="w-full text-sm">
+-          <thead>
+-            <tr className="bg-muted border-b border-border">
+-              <th className="px-4 py-2 text-left text-[10px] font-bold uppercase tracking-wider text-foreground">P├®riode</th>
+-              <th className="px-4 py-2 text-right text-[10px] font-bold uppercase tracking-wider text-foreground">Ventes</th>
+-              <th className="px-4 py-2 text-right text-[10px] font-bold uppercase tracking-wider text-foreground">B├®n├®fice</th>
+-              <th className="px-4 py-2 text-right text-[10px] font-bold uppercase tracking-wider text-foreground">Marge</th>
+-            </tr>
+-          </thead>
+-          <tbody className="divide-y divide-border">
+-            {data.map((d, i) => (
+-              <tr key={d.label} className={i % 2 === 0 ? "bg-card" : "bg-muted/20"}>
+-                <td className="px-4 py-2.5 font-medium text-foreground">{d.label}</td>
+-                <td className="px-4 py-2.5 text-right text-foreground">{d.sales.toLocaleString()} DA</td>
+-                <td className="px-4 py-2.5 text-right text-success font-medium">{d.profit.toLocaleString()} DA</td>
+-                <td className="px-4 py-2.5 text-right text-muted-foreground">{((d.profit / d.sales) * 100).toFixed(1)}%</td>
+-              </tr>
+-            ))}
+-          </tbody>
+-          <tfoot>
+-            <tr className="bg-primary text-primary-foreground font-bold">
+-              <td className="px-4 py-2.5">Total</td>
+-              <td className="px-4 py-2.5 text-right">{totalSales.toLocaleString()} DA</td>
+-              <td className="px-4 py-2.5 text-right">{totalProfit.toLocaleString()} DA</td>
+-              <td className="px-4 py-2.5 text-right">{((totalProfit / totalSales) * 100).toFixed(1)}%</td>
+-            </tr>
+-          </tfoot>
+-        </table>
+-      </motion.div>
++      </div>
++
++      {/* Report Dialog */}
++      <Dialog open={!!activeReport} onOpenChange={(open) => !open && setActiveReport(null)}>
++        <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col p-0 gap-0">
++          <DialogHeader className="px-5 pt-5 pb-3 border-b border-border">
++            <DialogTitle className="flex items-center gap-2">
++              {activeReportDef && (
++                <>
++                  <div className={`p-1.5 rounded-lg bg-muted ${activeReportDef.color}`}>
++                    <activeReportDef.icon className="h-4 w-4" />
++                  </div>
++                  {activeReportDef.title} ÔÇö {periodLabels[period]}
++                </>
++              )}
++            </DialogTitle>
++          </DialogHeader>
++          <ScrollArea className="flex-1">
++            <div className="p-0">
++              {activeReport && renderReportContent(activeReport)}
++            </div>
++          </ScrollArea>
++        </DialogContent>
++      </Dialog>
+     </div>
+   );
+ };

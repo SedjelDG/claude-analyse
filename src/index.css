@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,500;1,600;1,700&family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -15,16 +15,16 @@
     --popover: 0 0% 100%;
     --popover-foreground: 230 40% 12%;
 
-    --primary: 240 65% 24%;
+    --primary: 24 85% 48%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 220 25% 93%;
-    --secondary-foreground: 230 40% 12%;
+    --secondary: 35 15% 93%;
+    --secondary-foreground: 25 30% 12%;
 
-    --muted: 220 14% 92%;
-    --muted-foreground: 220 9% 46%;
+    --muted: 35 14% 92%;
+    --muted-foreground: 25 10% 46%;
 
-    --accent: 0 78% 45%;
+    --accent: 174 55% 42%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 84% 60%;
@@ -36,30 +36,30 @@
     --warning: 38 92% 50%;
     --warning-foreground: 0 0% 100%;
 
-    --info: 217 91% 60%;
+    --info: 174 55% 42%;
     --info-foreground: 0 0% 100%;
 
-    --border: 220 13% 87%;
-    --input: 220 13% 87%;
-    --ring: 240 65% 24%;
+    --border: 35 13% 87%;
+    --input: 35 13% 87%;
+    --ring: 24 85% 48%;
 
-    --radius: 0.25rem;
+    --radius: 0.5rem;
 
     /* POS / Register specific */
-    --pos-header: 240 65% 18%;
+    --pos-header: 24 85% 35%;
     --pos-header-foreground: 0 0% 100%;
     --pos-sidebar: 0 0% 100%;
-    --pos-sidebar-foreground: 230 40% 12%;
-    --pos-sidebar-active: 240 65% 24%;
+    --pos-sidebar-foreground: 25 30% 15%;
+    --pos-sidebar-active: 24 90% 50%;
     --pos-sidebar-active-foreground: 0 0% 100%;
     --pos-badge-red: 0 78% 45%;
-    --pos-badge-blue: 217 91% 50%;
+    --pos-badge-blue: 174 55% 42%;
     --pos-badge-green: 142 71% 35%;
     --pos-badge-yellow: 38 92% 50%;
 
     /* Register page */
-    --register-bg: 220 15% 94%;
-    --register-border: 220 13% 87%;
+    --register-bg: 38 15% 94%;
+    --register-border: 35 13% 87%;
 
     /* Register action button colors */
     --register-btn-green: 142 60% 40%;
@@ -69,98 +69,92 @@
     --register-btn-yellow: 45 90% 50%;
     --register-btn-gold: 35 80% 50%;
     --register-btn-pink: 345 70% 55%;
-    --register-btn-lightblue: 200 60% 65%;
-    --register-btn-blue: 220 70% 55%;
-    --register-btn-teal: 180 55% 42%;
+    --register-btn-lightblue: 174 50% 55%;
+    --register-btn-blue: 174 55% 42%;
+    --register-btn-teal: 174 55% 42%;
     --register-btn-purple: 270 45% 50%;
     --register-btn-darkred: 0 65% 38%;
-    --register-btn-dark: 220 15% 25%;
-    --register-btn-gray: 220 10% 60%;
+    --register-btn-dark: 25 15% 25%;
+    --register-btn-gray: 30 10% 60%;
 
     --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-foreground: 25 10% 26.1%;
+    --sidebar-primary: 24 85% 48%;
     --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 4.8% 95.9%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-accent: 38 10% 95.9%;
+    --sidebar-accent-foreground: 25 10% 10%;
+    --sidebar-border: 35 13% 91%;
+    --sidebar-ring: 24 85% 48%;
+
+    --gradient-primary: linear-gradient(135deg, hsl(24, 95%, 55%), hsl(174, 80%, 45%));
+    --gradient-header: linear-gradient(135deg, hsl(24, 90%, 40%), hsl(24, 80%, 30%));
 
     --font-sans: 'Inter', system-ui, sans-serif;
     --font-mono: 'JetBrains Mono', monospace;
+    --font-digital: 'Chakra Petch', sans-serif;
   }
 
   .dark {
-    --background: 230 25% 9%;
-    --foreground: 210 40% 92%;
+    --background: 25 20% 9%;
+    --foreground: 35 30% 92%;
 
-    --card: 230 22% 13%;
-    --card-foreground: 210 40% 92%;
+    --card: 25 18% 13%;
+    --card-foreground: 35 30% 92%;
 
-    --popover: 230 22% 13%;
-    --popover-foreground: 210 40% 92%;
+    --popover: 25 18% 13%;
+    --popover-foreground: 35 30% 92%;
 
-    --primary: 225 65% 55%;
+    --primary: 24 80% 52%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 230 18% 18%;
-    --secondary-foreground: 210 40% 85%;
+    --secondary: 25 15% 18%;
+    --secondary-foreground: 35 30% 85%;
 
-    --muted: 230 15% 17%;
-    --muted-foreground: 220 10% 55%;
+    --muted: 25 12% 17%;
+    --muted-foreground: 30 10% 55%;
 
-    --accent: 0 72% 55%;
+    --accent: 174 65% 50%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 80% 55%;
     --destructive-foreground: 0 0% 100%;
 
-    --success: 142 65% 40%;
+    --success: 142 65% 45%;
     --success-foreground: 0 0% 100%;
 
     --warning: 38 88% 55%;
     --warning-foreground: 0 0% 100%;
 
-    --info: 217 85% 60%;
+    --info: 174 80% 60%;
     --info-foreground: 0 0% 100%;
 
-    --border: 230 15% 22%;
-    --input: 230 15% 22%;
-    --ring: 225 65% 55%;
+    --border: 25 12% 22%;
+    --input: 25 12% 22%;
+    --ring: 24 80% 52%;
 
-    --pos-header: 230 45% 12%;
-    --pos-header-foreground: 210 40% 92%;
-    --pos-sidebar: 230 22% 13%;
-    --pos-sidebar-foreground: 210 40% 85%;
-    --pos-sidebar-active: 225 65% 55%;
+    --pos-header: 25 40% 12%;
+    --pos-header-foreground: 35 30% 92%;
+    --pos-sidebar: 25 18% 13%;
+    --pos-sidebar-foreground: 35 30% 85%;
+    --pos-sidebar-active: 24 80% 52%;
     --pos-sidebar-active-foreground: 0 0% 100%;
 
-    --register-bg: 230 20% 11%;
-    --register-border: 230 15% 22%;
+    --register-bg: 25 15% 11%;
+    --register-border: 25 12% 22%;
 
-    --register-btn-green: 142 55% 45%;
-    --register-btn-salmon: 10 70% 55%;
-    --register-btn-red: 0 68% 50%;
-    --register-btn-olive: 40 30% 45%;
-    --register-btn-yellow: 45 85% 55%;
-    --register-btn-gold: 35 75% 55%;
-    --register-btn-pink: 345 65% 55%;
-    --register-btn-lightblue: 200 55% 60%;
-    --register-btn-blue: 220 65% 58%;
-    --register-btn-teal: 180 50% 45%;
-    --register-btn-purple: 270 40% 55%;
-    --register-btn-darkred: 0 60% 42%;
-    --register-btn-dark: 220 15% 30%;
-    --register-btn-gray: 220 10% 50%;
+    --register-btn-blue: 174 60% 55%;
+    --register-btn-teal: 174 50% 50%;
+    --register-btn-dark: 25 12% 30%;
+    --register-btn-gray: 30 10% 50%;
 
-    --sidebar-background: 230 22% 11%;
-    --sidebar-foreground: 210 40% 80%;
-    --sidebar-primary: 225 65% 55%;
+    --sidebar-background: 25 18% 11%;
+    --sidebar-foreground: 35 15% 80%;
+    --sidebar-primary: 24 80% 52%;
     --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 230 18% 17%;
-    --sidebar-accent-foreground: 210 40% 85%;
-    --sidebar-border: 230 15% 22%;
-    --sidebar-ring: 225 65% 55%;
+    --sidebar-accent: 25 15% 17%;
+    --sidebar-accent-foreground: 35 15% 85%;
+    --sidebar-border: 25 12% 22%;
+    --sidebar-ring: 24 80% 52%;
   }
 }
 
@@ -177,6 +171,10 @@
   .font-arabic {
     font-family: 'IBM Plex Sans Arabic', sans-serif !important;
   }
+  
+  .font-digital {
+    font-family: var(--font-digital) !important;
+  }
 }
 
 @layer utilities {
@@ -185,7 +183,14 @@
   }
   
   .pos-header-gradient {
-    background: hsl(var(--pos-header));
+    background: var(--gradient-header);
+  }
+
+  .ds-gradient-text {
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
   }
 
   .pos-stat-card {
@@ -199,5 +204,28 @@
   .pos-table-header {
     background: hsl(var(--primary));
     color: hsl(var(--primary-foreground));
+  }
+
+  .ds-gradient-border {
+    position: relative;
+    border: none;
+  }
+
+  .ds-gradient-border::before {
+    content: "";
+    position: absolute;
+    inset: -1px;
+    padding: 1px;
+    border-radius: inherit;
+    background: var(--gradient-primary);
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+
+  .ds-glass {
+    @apply bg-white/70 backdrop-blur-md border border-white/20 shadow-xl;
   }
 }

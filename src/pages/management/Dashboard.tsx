@@ -16,7 +16,7 @@ const salesData = [
 ];
 
 const categoryData = [
-  { name: "Alimentation", value: 45, color: "hsl(222, 62%, 18%)" },
+  { name: "Alimentation", value: 45, color: "hsl(24, 85%, 48%)" },
   { name: "Boissons", value: 25, color: "hsl(0, 78%, 45%)" },
   { name: "Hygiène", value: 15, color: "hsl(217, 91%, 50%)" },
   { name: "Autres", value: 15, color: "hsl(38, 92%, 50%)" },
@@ -95,15 +95,15 @@ const Dashboard = () => (
           <AreaChart data={salesData}>
             <defs>
               <linearGradient id="salesGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="hsl(222, 62%, 18%)" stopOpacity={0.3} />
-                <stop offset="100%" stopColor="hsl(222, 62%, 18%)" stopOpacity={0} />
+                <stop offset="0%" stopColor="hsl(24, 85%, 48%)" stopOpacity={0.3} />
+                <stop offset="100%" stopColor="hsl(24, 85%, 48%)" stopOpacity={0} />
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(220, 13%, 87%)" />
             <XAxis dataKey="name" tick={{ fontSize: 12 }} stroke="hsl(220, 9%, 46%)" />
             <YAxis tick={{ fontSize: 12 }} stroke="hsl(220, 9%, 46%)" />
             <Tooltip />
-            <Area type="monotone" dataKey="ventes" stroke="hsl(222, 62%, 18%)" fill="url(#salesGrad)" strokeWidth={2} />
+            <Area type="monotone" dataKey="ventes" stroke="hsl(24, 85%, 48%)" fill="url(#salesGrad)" strokeWidth={2} />
           </AreaChart>
         </ResponsiveContainer>
       </motion.div>

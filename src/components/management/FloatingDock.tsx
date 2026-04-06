@@ -1,6 +1,6 @@
 import { NavLink, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { LayoutDashboard, Package, Scale, Users, ChevronLeft, LucideIcon, Banknote, FileText, Truck } from "lucide-react";
+import { LayoutDashboard, Package, Scale, Users, ChevronLeft, LucideIcon, Banknote, FileText, Truck, Store, Contact } from "lucide-react";
 import { useState } from "react";
 import { useUserStore } from "@/hooks/useUserStore";
 
@@ -20,6 +20,8 @@ const dockItems: DockItem[] = [
   { to: "/management/reports", icon: FileText, label: "Rapports", color: "hsl(var(--accent))" },
   { to: "/management/scale", icon: Scale, label: "Balance / PLU", color: "hsl(var(--info))" },
   { to: "/management/users", icon: Users, label: "Utilisateurs", color: "hsl(var(--primary))" },
+  { to: "/management/contacts", icon: Contact, label: "Contacts", color: "hsl(var(--success))" },
+  { to: "/management/store", icon: Store, label: "Magasin", color: "hsl(var(--warning))" },
 ];
 
 const DockIcon = ({ item }: { item: DockItem }) => {
@@ -92,7 +94,7 @@ const FloatingDock = () => {
       transition={{ type: "spring", stiffness: 300, damping: 25, delay: 0.2 }}
       className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50"
     >
-      <div className="flex items-center gap-2 rounded-2xl border border-border bg-card/90 backdrop-blur-xl px-3 py-2 shadow-xl">
+      <div className="flex items-center gap-2 rounded-2xl ds-gradient-border ds-glass px-4 py-2.5">
         {/* Back button */}
         <motion.button
           onMouseEnter={() => setBackHovered(true)}

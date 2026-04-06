@@ -66,7 +66,7 @@ const Index = () => {
             initial={{ opacity: 0, x: -30 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.6, ease: "easeOut" }}
-            className="text-5xl font-black tracking-tight text-primary"
+            className="text-8xl font-black tracking-tight ds-gradient-text"
           >
             D
           </motion.span>
@@ -74,7 +74,7 @@ const Index = () => {
             initial={{ opacity: 0, x: 30 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.6, ease: "easeOut", delay: 0.15 }}
-            className="text-5xl font-black tracking-tight text-primary"
+            className="text-8xl font-black tracking-tight ds-gradient-text"
           >
             S
           </motion.span>
@@ -83,18 +83,16 @@ const Index = () => {
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5, duration: 0.4 }}
-          className="text-xs tracking-[0.3em] uppercase text-muted-foreground font-semibold"
+          className="text-lg tracking-[0.4em] uppercase text-slate-400 font-bold -mt-2"
         >
           Software
         </motion.p>
-        <motion.p
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 0.5 }}
-          transition={{ delay: 0.8, duration: 0.6 }}
-          className="text-[10px] tracking-widest uppercase text-muted-foreground mt-1"
-        >
-          Djaouad & Seddik
-        </motion.p>
+        <motion.div
+           initial={{ scaleX: 0, opacity: 0 }}
+           animate={{ scaleX: 1, opacity: 0.3 }}
+           transition={{ delay: 0.8, duration: 0.8 }}
+           className="h-[2px] w-32 bg-gradient-to-r from-orange-500 to-cyan-500 mx-auto mt-4 rounded-full"
+        />
       </div>
 
       {openMode ? (

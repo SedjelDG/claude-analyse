@@ -16,12 +16,12 @@ import Users from "./pages/management/Users.tsx";
 import CashHistory from "./pages/management/CashHistory.tsx";
 import Reports from "./pages/management/Reports.tsx";
 import Purchases from "./pages/management/Purchases.tsx";
+import StoreInfo from "./pages/management/StoreInfo.tsx";
+import Contacts from "./pages/management/Contacts.tsx";
 
 const queryClient = new QueryClient();
 
-const App = () => {
-  console.log("App component: Rendering...");
-  return (
+const App = () => (
   <QueryClientProvider client={queryClient}>
     <UserStoreProvider>
       <TooltipProvider>
@@ -40,6 +40,8 @@ const App = () => {
               <Route path="cash" element={<CashHistory />} />
               <Route path="reports" element={<Reports />} />
               <Route path="purchases" element={<Purchases />} />
+              <Route path="store" element={<StoreInfo />} />
+              <Route path="contacts" element={<Contacts />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
@@ -47,7 +49,6 @@ const App = () => {
       </TooltipProvider>
     </UserStoreProvider>
   </QueryClientProvider>
-  );
-};
+);
 
 export default App;

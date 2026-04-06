@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useSettings, DEFAULT_HOTKEYS } from "@/hooks/useSettings";
 import { useUserStore } from "@/hooks/useUserStore";
 import { useToast } from "@/hooks/use-toast";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 const anim = (i: number) => ({
   initial: { opacity: 0, y: 12 },
@@ -121,8 +122,8 @@ const Settings = () => {
   let sectionIdx = 0;
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="pos-header-gradient px-4 py-2.5 flex items-center gap-3">
+    <div className="h-screen flex flex-col bg-background">
+      <div className="pos-header-gradient px-4 py-2.5 flex items-center gap-3 shrink-0 shadow-sm z-50">
         <Button variant="ghost" size="icon" onClick={handleBack} className="text-primary-foreground hover:bg-primary-foreground/10">
           <ChevronLeft className="h-5 w-5" />
         </Button>
@@ -134,8 +135,9 @@ const Settings = () => {
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto p-6 space-y-6">
-        {/* Language */}
+      <ScrollArea className="flex-1">
+        <div className="max-w-4xl mx-auto p-4 sm:p-6 pb-24 space-y-6">
+          {/* Language */}
         <motion.div {...anim(sectionIdx++)} className="pos-card p-5">
           <div className="flex items-center gap-3 mb-4">
             <div className="p-2 rounded-lg bg-primary/10 text-primary"><Globe className="h-5 w-5" /></div>
@@ -380,9 +382,33 @@ const Settings = () => {
                 </div>
               )}
             </div>
+
+            {/* Scale Barcode Parser */}
+            <div className="border border-border rounded-lg p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-3">
+                  <ScanBarcode className="h-5 w-5 text-muted-foreground" />
+                  <div><p className="text-sm font-medium text-foreground">Code-barres Balance (Ex: Rongta)</p><p className="text-xs text-muted-foreground">Analyse auto. du Poids via le code-barres imprimé</p></div>
+                </div>
+                <div className="flex items-center gap-3">
+                  {settings.hardware.barcodeScale?.enabled ? <span className="text-xs text-success flex items-center gap-1">Activé</span> : <span className="text-xs text-muted-foreground flex items-center gap-1">Désactivé</span>}
+                  <Switch checked={settings.hardware.barcodeScale?.enabled ?? false} onCheckedChange={(c) => updateHardware("barcodeScale", { enabled: c })} />
+                </div>
+              </div>
+              {settings.hardware.barcodeScale?.enabled && (
+                <div className="grid grid-cols-2 gap-3 pt-2 border-t border-border">
+                  <div>
+                    <Label className="text-xs">Préfixe code-barres (2 ou 3 chiffres)</Label>
+                    <Input className="h-8 text-xs" placeholder="Ex: 20 ou 21" value={settings.hardware.barcodeScale.prefix} onChange={(e) => updateHardware("barcodeScale", { prefix: e.target.value })} />
+                    <p className="text-[10px] text-muted-foreground mt-1">Ex: 20 0004 01500 3 (Préfixe 20, PLU 0004, Poids 1.500kg)</p>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </motion.div>
-      </div>
+        </div>
+      </ScrollArea>
     </div>
   );
 };

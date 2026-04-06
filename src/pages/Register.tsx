@@ -14,6 +14,7 @@ import { useUserStore, STANDARD_CASHIER } from "@/hooks/useUserStore";
 import { useSettings, DEFAULT_HOTKEYS } from "@/hooks/useSettings";
 import { useCashRegister } from "@/hooks/useCashRegister";
 import RegisterSearchBar from "@/components/register/RegisterSearchBar";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface CartItem {
   id: string;
@@ -132,33 +133,65 @@ const Register = () => {
   const dateStr = now.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" });
   const timeStr = now.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
 
-  const addProductToCart = useCallback((product: { id?: string; name: string; price: number; barcode?: string }) => {
+  const addProductToCart = useCallback((product: { id?: string; name: string; price: number; barcode?: string; quantity?: number }) => {
     updateCart((prev) => {
-      const existing = prev.find((i) => i.name === product.name);
-      if (existing) return prev.map((i) => i.name === product.name ? { ...i, quantity: i.quantity + 1 } : i);
-      return [...prev, { id: `cart-${Date.now()}`, name: product.name, quantity: 1, price: product.price, barcode: product.barcode }];
+      const existing = prev.find((item) => item.id === product.id && item.id !== "custom_misc");
+      if (existing) {
+        return prev.map((item) =>
+          item.id === product.id ? { ...item, quantity: item.quantity + (product.quantity || 1) } : item
+        );
+      }
+      return [
+        ...prev,
+        {
+          id: product.id || String(Date.now()),
+          name: product.name,
+          price: product.price,
+          quantity: product.quantity || 1,
+          originalPrice: product.price, // Store the base price for discounts
+          originalName: product.name,
+          packVariantIndex: -1,
+          barcode: product.barcode,
+        },
+      ];
     });
-    toast({ title: t("toast.itemAdded"), description: product.name });
-  }, [updateCart, toast, t]);
+    toast({ title: product.name, description: t("toast.itemAdded") });
+  }, [updateCart, t]);
+
+  const removeProductFromCart = useCallback((productId: string) => {
+    updateCart((prev) => {
+      const existing = prev.find((item) => item.id === productId);
+      if (existing && existing.quantity > 1) {
+        return prev.map((item) => (item.id === productId ? { ...item, quantity: item.quantity - 1 } : item));
+      }
+      return prev.filter((item) => item.id !== productId);
+    });
+  }, [updateCart]);
 
   const actions: Record<string, () => void> = {
-    "action.add": () => setSearchOpen(true),
+    "action.add": () => {
+      if (!selectedItemId) { toast({ title: t("toast.noItemSelected"), description: t("toast.selectItem") }); return; }
+      const item = cart.find((i) => i.id === selectedItemId);
+      if (item) {
+        addProductToCart(item);
+        toast({ title: t("toast.updated"), description: item.name });
+      }
+    },
     "action.deduct": () => {
       if (!selectedItemId) { toast({ title: t("toast.noItemSelected"), description: t("toast.selectItem") }); return; }
-      updateCart((prev) => prev.map((i) => i.id === selectedItemId ? { ...i, quantity: Math.max(1, i.quantity - 1) } : i));
-      toast({ title: t("toast.quantityUpdated") });
+      removeProductFromCart(selectedItemId);
     },
-    "action.search": () => setSearchOpen((o) => !o),
+    "action.search": () => setSearchOpen(true),
     "action.remove": () => {
       if (!selectedItemId) { toast({ title: t("toast.noItemSelected"), description: t("toast.selectItem") }); return; }
       updateCart((prev) => prev.filter((i) => i.id !== selectedItemId));
       setSelectedItemId(null);
-      toast({ title: t("toast.itemRemoved") });
     },
     "action.removeAll": () => {
       updateCart(() => []);
       setSelectedItemId(null);
-      toast({ title: t("toast.cartCleared") });
+      setDiscount(0);
+      toast({ title: t("action.removeAll") });
     },
     "action.lock": () => { setIsLocked(true); toast({ title: t("toast.locked") }); },
     "action.discount": () => setDiscountDialog(true),
@@ -234,6 +267,63 @@ const Register = () => {
   const userHotkeys = getHotkeys();
   const hiddenActions = settings.hiddenActions || [];
   const visibleButtons = ALL_ACTION_BUTTONS.filter((btn) => !hiddenActions.includes(btn.key));
+
+  // ── Barcode Interceptor ────────────────────────────────────────────────
+  const barcodeBuffer = useRef("");
+  const lastKeyTime = useRef(0);
+
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
+      const now = Date.now();
+      const isFast = now - lastKeyTime.current < 50;
+
+      if (e.key === "Enter") {
+        if (barcodeBuffer.current.length >= 5 && isFast) {
+          const code = barcodeBuffer.current;
+          let handled = false;
+
+          // ── Smart Barcode Parser (Scale Interceptor) ──
+          const scaleSettings = settings.hardware?.barcodeScale;
+          if (scaleSettings?.enabled && code.length === 13 && code.startsWith(scaleSettings.prefix || "20")) {
+            const plu = code.substring(2, 6); // 4-digit PLU
+            const weightPrm = code.substring(6, 11); // 5-digit weight (01500 = 1.500kg)
+            const weight = parseInt(weightPrm, 10) / 1000;
+            
+            // Mocking PLU lookup until Database is active
+            const foundNode = Object.values(shortcutProducts).find((p: any) => p.barcode === code || p.id === plu);
+            const found = foundNode || { name: `Article Pesé (PLU: ${plu})`, price: 450, barcode: code }; // 450 DA/kg mock
+              
+            // In a real POS, if the scale embeds WEIGHT, total = price * weight
+            // Here we pass the precise parsed weight directly into the quantity field
+            addProductToCart({ ...found, quantity: weight });
+            handled = true;
+          }
+
+          if (!handled) {
+            // Standard Barcode Lookup
+            const foundNode = Object.values(shortcutProducts).find((p: any) => p.barcode === code || p.name.includes(code));
+            const found = foundNode || { name: `Article ${code}`, price: Math.floor(Math.random() * 500) + 50, barcode: code };
+            addProductToCart(found);
+          }
+          
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        barcodeBuffer.current = "";
+      } else if (e.key.length === 1 && /[0-9a-zA-Z]/.test(e.key)) {
+        if (isFast || barcodeBuffer.current === "") {
+          barcodeBuffer.current += e.key;
+        } else {
+          barcodeBuffer.current = e.key;
+        }
+      }
+      lastKeyTime.current = now;
+    };
+    window.addEventListener("keydown", handleGlobalKeyDown, true);
+    return () => window.removeEventListener("keydown", handleGlobalKeyDown, true);
+  }, [addProductToCart]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -372,9 +462,9 @@ const Register = () => {
   });
 
   // ── Resizable right panel ────────────────────────────────────────────────
-  const PANEL_MIN = 160;
+  const PANEL_MIN = 320;
   const PANEL_MAX = 600;
-  const PANEL_DEFAULT = 260;
+  const PANEL_DEFAULT = 340;
   const PANEL_STORAGE_KEY = "register_hotkey_panel_width";
 
   const [panelWidth, setPanelWidth] = useState<number>(() => {
@@ -575,7 +665,7 @@ const Register = () => {
         style={{ width: leftPanelWidth }}
       >
         <div
-          className="flex flex-col items-center border-b border-register-border bg-white flex-shrink-0 relative overflow-hidden"
+          className="flex flex-col items-center border-b border-register-border bg-slate-50/50 flex-shrink-0 relative overflow-hidden"
           style={{ paddingTop: Math.round(18 * leftPanelScale), paddingBottom: Math.round(18 * leftPanelScale) }}
         >
           {/* Subtle background glow */}
@@ -595,7 +685,7 @@ const Register = () => {
                 className="font-black tracking-tighter"
                 style={{ 
                   fontSize: Math.round(48 * leftPanelScale),
-                  background: 'linear-gradient(to bottom right, #f97316, #06b6d4)',
+                  background: 'var(--gradient-primary)',
                   WebkitBackgroundClip: 'text',
                   WebkitTextFillColor: 'transparent'
                 }}
@@ -609,7 +699,7 @@ const Register = () => {
                 className="font-black tracking-tighter"
                 style={{ 
                   fontSize: Math.round(48 * leftPanelScale),
-                  background: 'linear-gradient(to bottom right, #f97316, #06b6d4)',
+                  background: 'var(--gradient-primary)',
                   WebkitBackgroundClip: 'text',
                   WebkitTextFillColor: 'transparent'
                 }}
@@ -622,7 +712,7 @@ const Register = () => {
                 className="font-bold tracking-[0.45em] uppercase"
                 style={{ 
                   fontSize: Math.round(10.5 * leftPanelScale),
-                  background: 'linear-gradient(to right, #f97316, #06b6d4)',
+                  background: 'var(--gradient-primary)',
                   WebkitBackgroundClip: 'text',
                   WebkitTextFillColor: 'transparent'
                 }}
@@ -634,7 +724,7 @@ const Register = () => {
         </div>
 
         <div
-          className="border-b border-register-border bg-[#1e3a8a] flex-shrink-0 overflow-hidden"
+          className="border-b border-register-border bg-slate-100 flex-shrink-0 overflow-hidden"
           style={{
             paddingLeft: 12,
             paddingRight: 12,
@@ -643,26 +733,26 @@ const Register = () => {
           }}
         >
           <p
-            className="font-bold text-white uppercase tracking-widest text-center truncate"
+            className="font-black ds-gradient-text uppercase tracking-widest text-center truncate"
             style={{ fontSize: Math.round(11 * leftPanelScale) }}
           >
             SUPÉRETTE ERRAHMA
           </p>
         </div>
 
-        <div className="px-4 py-2 border-b border-gray-50 bg-white flex items-center gap-2">
-          <Shield className="w-3.5 h-3.5 text-[#f97316] fill-[#f97316]/5" />
-          <span className="text-[10.5px] font-bold text-[#f97316] uppercase tracking-widest">{t("label.shortcuts")}</span>
+        <div className="px-4 py-2 border-b border-register-border bg-white flex items-center gap-2">
+          <Shield className="w-3.5 h-3.5 text-orange-500 fill-orange-500/5" />
+          <span className="text-[10.5px] font-black ds-gradient-text uppercase tracking-widest">{t("label.shortcuts")}</span>
         </div>
 
-        <div className="flex-1 overflow-auto">
+        <ScrollArea className="flex-1 bg-background border-b border-register-border pr-2.5">
           {shortcuts.map((s, i) => (
             <button key={i} onClick={() => handleShortcutClick(s.productId)} className="flex items-center gap-2 w-full px-3 py-2 border-b border-register-border hover:bg-muted/60 transition-colors text-left active:scale-[0.98]">
               <span className={`w-3 h-3 rounded-full ${s.color} shrink-0`} />
               <span className="text-[11px] font-medium text-foreground truncate">{s.name}</span>
             </button>
           ))}
-        </div>
+        </ScrollArea>
 
         <div className="border-t border-register-border flex flex-shrink-0 overflow-hidden">
           <button onClick={() => navigate("/settings", { state: { from: "/register" } })} className="flex items-center gap-2 justify-center flex-1 px-1 py-2 text-[11px] font-medium text-muted-foreground hover:bg-muted transition-colors border-r border-register-border min-w-0">
@@ -692,8 +782,8 @@ const Register = () => {
       <div className="flex-1 flex flex-col overflow-hidden">
         <div className="bg-card border-b border-register-border px-4 py-8 flex items-center justify-center">
           <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.4 }} className="text-center">
-            <motion.span key={totalTTC} initial={{ scale: 1.05, opacity: 0.7 }} animate={{ scale: 1, opacity: 1 }} className="text-8xl font-black text-primary tracking-tighter">
-              {totalTTC.toFixed(2).replace(".", ",")}
+            <motion.span key={totalTTC} initial={{ scale: 1.05, opacity: 0.7 }} animate={{ scale: 1, opacity: 1 }} className="text-8xl font-black text-primary tracking-tighter font-digital">
+              {totalTTC.toFixed(2)}
             </motion.span>
             <span className="text-3xl font-black text-primary/40 ml-3">DA</span>
           </motion.div>
@@ -709,7 +799,7 @@ const Register = () => {
             <div key={i} className={`text-center py-1.5 px-2 ${i < 3 ? "border-r border-register-border" : ""}`}>
               <div className="bg-primary text-primary-foreground px-2 py-1">
                 <p className="text-[9px] font-bold uppercase tracking-wider">{s.label}</p>
-                <p className="text-[11px] font-bold">{s.value}</p>
+                <p className="text-[11px] font-bold font-digital">{s.value}</p>
               </div>
             </div>
           ))}
@@ -735,7 +825,7 @@ const Register = () => {
         <RegisterSearchBar isOpen={searchOpen} onClose={() => setSearchOpen(false)} onSelectProduct={(p) => addProductToCart(p)} t={t} />
 
         {/* Items Table */}
-        <div className="flex-1 overflow-auto bg-background relative">
+        <ScrollArea className="flex-1 bg-background relative pr-2.5">
           <table className="w-full text-sm">
             <thead className="sticky top-0 z-10">
               <tr className="bg-muted border-b-2 border-primary">
@@ -761,10 +851,12 @@ const Register = () => {
                       </div>
                     </td>
                     <td className="px-3 py-2.5 text-center text-[12px]">
-                      <span className="inline-block min-w-[24px] py-0.5 bg-muted text-foreground font-bold">{item.quantity}</span>
+                      <button onClick={(e) => { e.stopPropagation(); setSelectedItemId(item.id); setTimeout(() => setQuantityDialog(true), 0); }} className="inline-block min-w-[24px] py-0.5 bg-muted text-foreground font-bold font-digital hover:bg-primary hover:text-primary-foreground transition-all cursor-pointer rounded-sm active:scale-95 shadow-sm">
+                        {item.quantity}
+                      </button>
                     </td>
-                    <td className="px-3 py-2.5 text-right text-muted-foreground text-[12px]">{item.price.toFixed(2)} DA</td>
-                    <td className="px-3 py-2.5 text-right font-bold text-foreground text-[12px]">{(item.quantity * item.price).toFixed(2)} DA</td>
+                    <td className="px-3 py-2.5 text-right text-muted-foreground text-[14px] font-digital">{item.price.toFixed(2)} DA</td>
+                    <td className="px-3 py-2.5 text-right font-bold text-foreground text-[14px] font-digital">{(item.quantity * item.price).toFixed(2)} DA</td>
                   </motion.tr>
                 ))}
               </AnimatePresence>
@@ -775,7 +867,7 @@ const Register = () => {
               {t("label.registerReady")}
             </motion.div>
           )}
-        </div>
+        </ScrollArea>
 
         {/* Bottom bar */}
         <div className="px-3 py-1.5 border-t border-register-border bg-muted flex items-center justify-between text-[11px] text-muted-foreground">
@@ -808,7 +900,7 @@ const Register = () => {
 
           <div className="flex flex-col items-center mb-2">
             <div
-              className="rounded-full border-2 border-[#f97316] flex items-center justify-center text-[#f97316] mb-1 bg-white shadow-sm"
+              className="rounded-full border-2 border-primary flex items-center justify-center text-primary mb-1 bg-white shadow-sm"
               style={{ 
                 width: Math.round(42 * headerScale), 
                 height: Math.round(42 * headerScale) 
@@ -817,7 +909,7 @@ const Register = () => {
               <User style={{ width: Math.round(22 * headerScale), height: Math.round(22 * headerScale) }} />
             </div>
             <span
-              className="font-black uppercase text-[#f97316] tracking-tight"
+              className="font-black uppercase ds-gradient-text tracking-tight"
               style={{ fontSize: Math.round(18 * headerScale) }}
             >
               {activeUser.name}
@@ -826,27 +918,27 @@ const Register = () => {
           <div className="flex items-center justify-center" style={{ gap: Math.round(16 * headerScale) }}>
             <div className="flex items-center" style={{ gap: Math.round(6 * headerScale) }}>
               <div
-                className="rounded-full border border-[#f97316]/30 flex items-center justify-center text-[#f97316]"
+                className="rounded-full border border-primary/30 flex items-center justify-center text-primary"
                 style={{ padding: Math.round(3.5 * headerScale) }}
               >
                 <CalendarDays style={{ width: Math.round(10 * headerScale), height: Math.round(10 * headerScale) }} />
               </div>
-              <span className="font-bold text-[#f97316]/90" style={{ fontSize: Math.round(12 * headerScale) }}>{dateStr}</span>
+              <span className="font-bold text-slate-600" style={{ fontSize: Math.round(12 * headerScale) }}>{dateStr}</span>
             </div>
             <div className="flex items-center" style={{ gap: Math.round(6 * headerScale) }}>
               <div
-                className="rounded-full border border-[#f97316]/30 flex items-center justify-center text-[#f97316]"
+                className="rounded-full border border-primary/30 flex items-center justify-center text-primary"
                 style={{ padding: Math.round(3.5 * headerScale) }}
               >
                 <Clock style={{ width: Math.round(10 * headerScale), height: Math.round(10 * headerScale) }} />
               </div>
-              <span className="font-bold text-[#f97316]/90" style={{ fontSize: Math.round(12 * headerScale) }}>{timeStr}</span>
+              <span className="font-bold text-slate-600" style={{ fontSize: Math.round(12 * headerScale) }}>{timeStr}</span>
             </div>
           </div>
         </div>
 
         {/* Button grid — reflows instantly as panelWidth changes */}
-        <div className="flex-1 overflow-auto p-1.5">
+        <ScrollArea className="flex-1 p-1.5 pr-2.5">
           {(() => {
             // Build rows so the last row can be centered if it's partial
             const rows: typeof visibleButtons[] = [];
@@ -926,7 +1018,7 @@ const Register = () => {
               );
             });
           })()}
-        </div>
+        </ScrollArea>
       </div>
     </div>
   );
