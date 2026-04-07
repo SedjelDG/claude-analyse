@@ -23,16 +23,17 @@ interface CartItem {
   price: number;
   barcode?: string;
   packVariantIndex?: number; // -1 = unit, 0+ = pack variant index
+  packSize: number;
   originalName?: string;
   originalPrice?: number;
 }
 
 const initialCart: CartItem[] = [
-  { id: "1", name: "Lait 1L", quantity: 2, price: 100, barcode: "6191234000001" },
-  { id: "2", name: "Pain", quantity: 3, price: 50, barcode: "6191234000002" },
-  { id: "3", name: "Eau 1.5L", quantity: 6, price: 25, barcode: "6191234000003" },
-  { id: "4", name: "Sucre 1kg", quantity: 1, price: 100, barcode: "6191234000004" },
-  { id: "5", name: "Fromage (0.5kg)", quantity: 1, price: 400, barcode: "6191234000005" },
+  { id: "1", name: "Lait 1L", quantity: 2, price: 100, barcode: "6191234000001", packSize: 1 },
+  { id: "2", name: "Pain", quantity: 3, price: 50, barcode: "6191234000002", packSize: 1 },
+  { id: "3", name: "Eau 1.5L", quantity: 6, price: 25, barcode: "6191234000003", packSize: 1 },
+  { id: "4", name: "Sucre 1kg", quantity: 1, price: 100, barcode: "6191234000004", packSize: 1 },
+  { id: "5", name: "Fromage (0.5kg)", quantity: 1, price: 400, barcode: "6191234000005", packSize: 1 },
 ];
 
 const shortcuts = [
@@ -151,6 +152,7 @@ const Register = () => {
           originalPrice: product.price, // Store the base price for discounts
           originalName: product.name,
           packVariantIndex: -1,
+          packSize: 1,
           barcode: product.barcode,
         },
       ];
@@ -251,15 +253,19 @@ const Register = () => {
       if (!variants || variants.length === 0) { toast({ title: "Pas de variantes", description: baseName }); return; }
       const currentIdx = item.packVariantIndex ?? -1;
       const nextIdx = currentIdx + 1 >= variants.length ? -1 : currentIdx + 1;
+      const currentTotalUnits = item.quantity * (item.packSize || 1);
+      
       if (nextIdx === -1) {
         // Back to unit
-        updateCart((prev) => prev.map((i) => i.id === selectedItemId ? { ...i, name: baseName, price: item.originalPrice || item.price, packVariantIndex: -1, originalName: baseName } : i));
-        toast({ title: t("action.packCycle"), description: baseName });
+        const newQty = currentTotalUnits; 
+        updateCart((prev) => prev.map((i) => i.id === selectedItemId ? { ...i, name: baseName, quantity: newQty, price: item.originalPrice || item.price, packVariantIndex: -1, packSize: 1, originalName: baseName } : i));
+        toast({ title: t("action.packCycle"), description: `${baseName} (${newQty} unités)` });
       } else {
         const v = variants[nextIdx];
         const origPrice = item.originalPrice || item.price;
-        updateCart((prev) => prev.map((i) => i.id === selectedItemId ? { ...i, name: `${baseName} (${v.name})`, price: v.price, packVariantIndex: nextIdx, originalName: baseName, originalPrice: origPrice } : i));
-        toast({ title: t("action.packCycle"), description: v.name });
+        const newQty = Math.max(1, Math.floor(currentTotalUnits / v.size));
+        updateCart((prev) => prev.map((i) => i.id === selectedItemId ? { ...i, name: `${baseName} (${v.name})`, quantity: newQty, price: v.price, packVariantIndex: nextIdx, packSize: v.size, originalName: baseName, originalPrice: origPrice } : i));
+        toast({ title: t("action.packCycle"), description: `${v.name} (Qté: ${newQty})` });
       }
     },
   };
@@ -346,8 +352,13 @@ const Register = () => {
         const key = shortcutMap[combo];
         if (key && actions[key]) { e.preventDefault(); actions[key](); return; }
       }
+      // Fix: Check the duration BEFORE the current key was processed by the interceptor
+      // If the buffer has content and we just got a key, the interceptor just updated lastKeyTime.
+      // So we check if the PREVIOUS gap was fast.
+      const isActuallyScanning = barcodeBuffer.current.length > 0;
+      
       if (!searchOpen && !quantityDialog && !discountDialog && !paymentDialog && !cashDialog &&
-        e.key.length === 1 && /[a-zA-Z0-9]/.test(e.key) && !e.ctrlKey && !e.altKey) {
+        e.key.length === 1 && /[a-zA-Z0-9]/.test(e.key) && !e.ctrlKey && !e.altKey && !isActuallyScanning) {
         setSearchOpen(true);
       }
     };
@@ -851,9 +862,16 @@ const Register = () => {
                       </div>
                     </td>
                     <td className="px-3 py-2.5 text-center text-[12px]">
-                      <button onClick={(e) => { e.stopPropagation(); setSelectedItemId(item.id); setTimeout(() => setQuantityDialog(true), 0); }} className="inline-block min-w-[24px] py-0.5 bg-muted text-foreground font-bold font-digital hover:bg-primary hover:text-primary-foreground transition-all cursor-pointer rounded-sm active:scale-95 shadow-sm">
-                        {item.quantity}
-                      </button>
+                      <div className="flex flex-col items-center gap-0.5">
+                        <button onClick={(e) => { e.stopPropagation(); setSelectedItemId(item.id); setTimeout(() => setQuantityDialog(true), 0); }} className="inline-block min-w-[28px] px-1 py-0.5 bg-muted text-foreground font-bold font-digital hover:bg-primary hover:text-primary-foreground transition-all cursor-pointer rounded-sm active:scale-95 shadow-sm">
+                          {item.quantity}
+                        </button>
+                        {item.packSize && item.packSize > 1 && (
+                          <span className="text-[9px] font-black text-primary/70 bg-primary/5 px-1 rounded border border-primary/10">
+                            x{item.packSize}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-3 py-2.5 text-right text-muted-foreground text-[14px] font-digital">{item.price.toFixed(2)} DA</td>
                     <td className="px-3 py-2.5 text-right font-bold text-foreground text-[14px] font-digital">{(item.quantity * item.price).toFixed(2)} DA</td>
