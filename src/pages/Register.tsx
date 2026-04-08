@@ -6,7 +6,7 @@ import {
   CreditCard, Pause, Hash, Wallet, DoorOpen, PiggyBank, User,
   Gift, X, Power, Clock, CalendarDays, Barcode,
   Banknote, CreditCard as CardIcon, Settings, LogOut, Globe,
-  PackageOpen, Shield, Play
+  PackageOpen, Shield, Play, Receipt
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useTranslation } from "@/hooks/useTranslation";
@@ -14,6 +14,7 @@ import { useUserStore, STANDARD_CASHIER } from "@/hooks/useUserStore";
 import { useSettings, DEFAULT_HOTKEYS } from "@/hooks/useSettings";
 import { useCashRegister } from "@/hooks/useCashRegister";
 import RegisterSearchBar from "@/components/register/RegisterSearchBar";
+import SalesHistoryDialog from "@/components/register/SalesHistoryDialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface CartItem {
@@ -82,6 +83,7 @@ const ALL_ACTION_BUTTONS = [
   { key: "action.treasury", icon: PiggyBank },
   { key: "action.client", icon: User },
   { key: "action.packCycle", icon: PackageOpen },
+  { key: "action.salesHistory", icon: Receipt },
 ];
 
 const Register = () => {
@@ -114,6 +116,7 @@ const Register = () => {
   const [cashDialog, setCashDialog] = useState<"add" | "remove" | null>(null);
   const [cashAmount, setCashAmount] = useState("");
   const [cashNote, setCashNote] = useState("");
+  const [salesHistoryOpen, setSalesHistoryOpen] = useState(false);
 
   const cart = clientCarts[activeClient] || [];
   const updateCart = useCallback((updater: (prev: CartItem[]) => CartItem[]) => {
