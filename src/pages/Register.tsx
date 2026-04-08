@@ -580,6 +580,7 @@ const Register = () => {
   }, [panelWidth, leftPanelWidth]);
 
   return (
+    <>
     <div className="h-screen flex bg-register-bg overflow-hidden select-none">
       {/* LOCK OVERLAY */}
       <AnimatePresence>
