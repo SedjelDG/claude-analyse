@@ -1046,6 +1046,7 @@ const Register = () => {
       </div>
     </div>
     <SalesHistoryDialog open={salesHistoryOpen} onClose={() => setSalesHistoryOpen(false)} />
+    </>
   );
 };
 
