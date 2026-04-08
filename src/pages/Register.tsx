@@ -1044,6 +1044,7 @@ const Register = () => {
         </ScrollArea>
       </div>
     </div>
+    <SalesHistoryDialog open={salesHistoryOpen} onClose={() => setSalesHistoryOpen(false)} />
   );
 };
 
