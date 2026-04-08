@@ -21,6 +21,7 @@ import * as ScrollAreaPrimitive from "@radix-ui/react-scroll-area";
 import { ScrollBar } from "@/components/ui/scroll-area";
 import { generateMockProducts, Product, ExpirationEntry, PackVariant } from "@/utils/mockProducts";
 import { ProductFormDialog, EditableProduct, emptyProduct } from "@/components/management/ProductFormDialog";
+import { ProductCreationWizard } from "@/components/management/ProductCreationWizard";
 
 const VirtualScrollArea = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>((props, ref) => (
   <ScrollAreaPrimitive.Root className="relative h-full w-full overflow-hidden radix-virtual-container">
@@ -103,6 +104,7 @@ const ProductManagement = () => {
   const [products, setProducts] = useState<Product[]>([]);
   useEffect(() => { setProducts(generateMockProducts(20000)); }, []);
   const [showProductDialog, setShowProductDialog] = useState(false);
+  const [showCreationWizard, setShowCreationWizard] = useState(false);
   const [editingProduct, setEditingProduct] = useState<EditableProduct>(emptyProduct);
   const [sortField, setSortField] = useState<keyof Product>("name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
@@ -130,7 +132,7 @@ const ProductManagement = () => {
   const SortIcon = ({ field }: { field: keyof Product }) =>
     sortField === field ? (sortDir === "asc" ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />) : null;
 
-  const openNewProduct = () => { setEditingProduct({ ...emptyProduct, barcodes: [""] }); setShowProductDialog(true); };
+  const openNewProduct = () => { setShowCreationWizard(true); };
   const openEditProduct = (p: Product) => { setEditingProduct({ ...p }); setShowProductDialog(true); };
 
   const deleteProduct = (id: string) => setProducts((prev) => prev.filter((p) => p.id !== id));
@@ -152,6 +154,13 @@ const ProductManagement = () => {
       setProducts(prev => [newProduct, ...prev]);
     }
     setShowProductDialog(false);
+  };
+
+  const handleWizardSave = (newProduct: EditableProduct) => {
+    if (!newProduct.name) return;
+    const cleanPackVariants = (newProduct.packVariants || []).filter(v => v.size > 1 && v.name && v.price > 0);
+    const product = { ...newProduct, packVariants: cleanPackVariants, id: `prod-${Date.now()}` } as Product;
+    setProducts(prev => [product, ...prev]);
   };
 
   const statusColor = (s: string) =>
@@ -492,6 +501,11 @@ const ProductManagement = () => {
         onClose={() => setShowProductDialog(false)}
         product={editingProduct}
         onSave={handleSaveProduct}
+      />
+      <ProductCreationWizard
+        isOpen={showCreationWizard}
+        onClose={() => setShowCreationWizard(false)}
+        onSave={handleWizardSave}
       />
     </div>
   );
