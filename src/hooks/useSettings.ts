@@ -19,6 +19,7 @@ export const DEFAULT_HOTKEYS: Record<string, string> = {
   "action.gift": "Ctrl+G",
   "action.close": "Ctrl+X",
   "action.packCycle": "F8",
+  "action.salesHistory": "F10",
 };
 
 export interface AppSettings {

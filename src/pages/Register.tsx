@@ -271,6 +271,7 @@ const Register = () => {
         toast({ title: t("action.packCycle"), description: `${v.name} (Qté: ${newQty})` });
       }
     },
+    "action.salesHistory": () => setSalesHistoryOpen(true),
   };
 
   const userHotkeys = getHotkeys();
@@ -449,6 +450,7 @@ const Register = () => {
       "action.close": { text: "text-[#b91c1c]", bg: "bg-[#b91c1c]", border: "border-[#b91c1c]/40" },
       "action.stop": { text: "text-[#000000]", bg: "bg-[#000000]", border: "border-[#000000]/40" },
       "action.packCycle": { text: "text-[#dc2626]", bg: "bg-[#dc2626]", border: "border-[#dc2626]/40" },
+      "action.salesHistory": { text: "text-[#6366f1]", bg: "bg-[#6366f1]", border: "border-[#6366f1]/40" },
     };
     return themes[actionKey] || { text: "text-primary", bg: "bg-primary", border: "border-primary/40" };
   };
