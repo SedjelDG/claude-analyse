@@ -127,6 +127,18 @@ export const ProductCreationWizard: React.FC<ProductCreationWizardProps> = ({ is
           else if (saleMode === "advanced" && wantsWholesale === null) setWantsWholesale(false);
         }
       }
+
+      // Step 4: Enter to save, A for save+new
+      if (step === 4) {
+        if (e.key === "Enter" && !(e.target instanceof HTMLInputElement)) {
+          e.preventDefault();
+          handleSave();
+        }
+        if (e.key.toLowerCase() === "a" && !(e.target instanceof HTMLInputElement)) {
+          e.preventDefault();
+          handleSaveAndNew();
+        }
+      }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
