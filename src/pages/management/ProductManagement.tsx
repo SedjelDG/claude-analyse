@@ -502,11 +502,12 @@ const ProductManagement = () => {
         product={editingProduct}
         onSave={handleSaveProduct}
       />
-      <ProductCreationWizard
-        isOpen={showCreationWizard}
-        onClose={() => setShowCreationWizard(false)}
-        onSave={handleWizardSave}
-      />
+        <ProductCreationWizard
+          isOpen={showCreationWizard}
+          onClose={() => setShowCreationWizard(false)}
+          onSave={handleWizardSave}
+          products={products}
+        />
     </div>
   );
 };
