@@ -23,6 +23,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     "action.stop": "إيقاف",
     "action.lang": "عربي — FR",
     "action.packCycle": "دورة الحزمة",
+    "action.salesHistory": "سجل المبيعات",
 
     // Labels
     "label.totalHT": "المجموع الصافي",
@@ -101,6 +102,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     "action.lock": "VERROUILLER",
     "action.discount": "REMISE",
     "action.packCycle": "CYCLE PACK",
+    "action.salesHistory": "HISTORIQUE",
     "action.return": "RETOUR",
     "action.payment": "PAIEMENT",
     "action.hold": "ATTENTE",
@@ -203,6 +205,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     "action.stop": "STOP",
     "action.lang": "FR — EN",
     "action.packCycle": "PACK CYCLE",
+    "action.salesHistory": "SALES HISTORY",
 
     // Labels
     "label.totalHT": "SUBTOTAL",

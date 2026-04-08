@@ -6,7 +6,7 @@ import {
   CreditCard, Pause, Hash, Wallet, DoorOpen, PiggyBank, User,
   Gift, X, Power, Clock, CalendarDays, Barcode,
   Banknote, CreditCard as CardIcon, Settings, LogOut, Globe,
-  PackageOpen, Shield, Play
+  PackageOpen, Shield, Play, Receipt
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useTranslation } from "@/hooks/useTranslation";
@@ -14,6 +14,7 @@ import { useUserStore, STANDARD_CASHIER } from "@/hooks/useUserStore";
 import { useSettings, DEFAULT_HOTKEYS } from "@/hooks/useSettings";
 import { useCashRegister } from "@/hooks/useCashRegister";
 import RegisterSearchBar from "@/components/register/RegisterSearchBar";
+import SalesHistoryDialog from "@/components/register/SalesHistoryDialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface CartItem {
@@ -82,6 +83,7 @@ const ALL_ACTION_BUTTONS = [
   { key: "action.treasury", icon: PiggyBank },
   { key: "action.client", icon: User },
   { key: "action.packCycle", icon: PackageOpen },
+  { key: "action.salesHistory", icon: Receipt },
 ];
 
 const Register = () => {
@@ -114,6 +116,7 @@ const Register = () => {
   const [cashDialog, setCashDialog] = useState<"add" | "remove" | null>(null);
   const [cashAmount, setCashAmount] = useState("");
   const [cashNote, setCashNote] = useState("");
+  const [salesHistoryOpen, setSalesHistoryOpen] = useState(false);
 
   const cart = clientCarts[activeClient] || [];
   const updateCart = useCallback((updater: (prev: CartItem[]) => CartItem[]) => {
@@ -268,6 +271,7 @@ const Register = () => {
         toast({ title: t("action.packCycle"), description: `${v.name} (Qté: ${newQty})` });
       }
     },
+    "action.salesHistory": () => setSalesHistoryOpen(true),
   };
 
   const userHotkeys = getHotkeys();
@@ -446,6 +450,7 @@ const Register = () => {
       "action.close": { text: "text-[#b91c1c]", bg: "bg-[#b91c1c]", border: "border-[#b91c1c]/40" },
       "action.stop": { text: "text-[#000000]", bg: "bg-[#000000]", border: "border-[#000000]/40" },
       "action.packCycle": { text: "text-[#dc2626]", bg: "bg-[#dc2626]", border: "border-[#dc2626]/40" },
+      "action.salesHistory": { text: "text-[#6366f1]", bg: "bg-[#6366f1]", border: "border-[#6366f1]/40" },
     };
     return themes[actionKey] || { text: "text-primary", bg: "bg-primary", border: "border-primary/40" };
   };
@@ -575,6 +580,7 @@ const Register = () => {
   }, [panelWidth, leftPanelWidth]);
 
   return (
+    <>
     <div className="h-screen flex bg-register-bg overflow-hidden select-none">
       {/* LOCK OVERLAY */}
       <AnimatePresence>
@@ -1039,6 +1045,8 @@ const Register = () => {
         </ScrollArea>
       </div>
     </div>
+    <SalesHistoryDialog open={salesHistoryOpen} onClose={() => setSalesHistoryOpen(false)} />
+    </>
   );
 };
 
