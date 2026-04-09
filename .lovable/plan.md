@@ -1,69 +1,39 @@
 
 
-## Plan: Rebuild Product Creation Wizard as Dynamic Micro-Step Flow
+## Plan: Wizard Refinements — 5 Enhancements
 
-### Problem
-The current wizard has 5 fixed macro-steps that bundle multiple fields together. The user wants a **one-field-at-a-time** flow where each screen shows only the current prompt, the answer dynamically determines what comes next, and answering "yes" to options (packs, wholesale, expiration) immediately morphs into the setup UI for that feature — not just a Y/N badge.
+### Changes
 
-### Architecture: Dynamic Step Queue
+**1. Category "Autres" → custom input**
+- In `CategoryStep`, when user selects "Autres", morph into a text input for typing a custom category name instead of immediately advancing.
 
-Instead of a static `STEPS` array, the wizard builds a **step queue dynamically** based on the chosen sale mode and the user's answers. Each step is a micro-screen showing one focused prompt.
+**2. Brand step → searchable list first**
+- Replace the plain `SingleInputStep` for brand with a new `BrandStep` that extracts unique brands from the `products` prop, displays them as a selectable list (like categories), and includes a text input at the bottom for typing a new brand. Arrow keys navigate existing brands, typing filters/creates new.
 
-**Standard flow:**
-```text
-Type → Name → Category/Brand → Barcode → Purchase/Stock → Sale Price → Margin display
-→ Q: Packs? → [YES: Pack setup] → Q: Expiration? → [YES: Expiration entry]
-→ Q: Wholesale? → [YES: Wholesale setup] → Confirm
-```
+**3. Purchase/Stock mode choice (units vs packs)**
+- Before the `PurchaseStep`, add a quick Y/N-style choice: "Achat par colis ou par unités ?" If "units", show a simpler 2-field screen (quantity + unit cost). If "packs", show the current intertwined packs screen (packs bought × units per pack × pack price).
 
-**Weighed (Pesé) flow:**
-```text
-Type → Name → Category/Brand → PLU (pre-filled) → Price per KG → Cost per KG
-→ Q: Expiration? → [YES: Expiration entry] → Confirm
-```
+**4. Combined Finance + Stock screen**
+- Merge purchase, sale price, weight price (for mixte), and margins into one large panel with all fields visible. Auto-focus walks through them sequentially via Enter: cost fields → sale price → weight price (if mixte) → stock display. The user sees all financial context at once while filling each field.
+- Remove the separate `unitPrice`, `weightPrice`, `pricePerKg`, `costPerKg`, and `margins` micro-steps — fold them into this combined step.
 
-**Mixte flow:**
-```text
-Type → Name → Category/Brand → Barcode → PLU (pre-filled)
-→ Purchase/Stock (intertwined: packs bought × pack price) → Unit Sale Price
-→ Weight Sale Price → Margins
-→ Q: Packs? → [YES: Pack setup] → Q: Expiration? → [YES: Expiration entry]
-→ Q: Wholesale? → [YES: Wholesale setup] → Confirm
-```
+**5. Multiple barcodes + multiple pack variants**
+- **Barcodes**: After scanning one barcode, show a "+ Ajouter un code-barres" hint (press `+` or `Tab`). Each additional barcode gets its own input row. Enter on the last one advances.
+- **Pack variants**: After configuring one pack variant, show "Ajouter un autre pack ?" (O/N). Pressing O resets the pack fields and lets them define another variant (e.g., Pack de 6 AND Pack de 12). All variants are listed as chips above the input.
 
-### Key Changes
+### Files
 
-**1. Micro-step state machine** — Replace `step` integer + `STEPS` array with a `currentStep` string and a `getNextStep()` function that returns the next logical step based on sale mode and accumulated answers. Each step ID maps to a render function.
+- **`src/components/management/ProductCreationWizard.tsx`** — Major edits:
+  - `CategoryStep`: add custom input mode when "Autres" selected
+  - New `BrandStep` component with product-derived brand list + free text
+  - New `StockModeStep` (units vs packs choice)
+  - New `CombinedFinanceStep` replacing 4-5 separate price/margin steps
+  - `BarcodeStep` replacing single barcode input — supports multiple entries
+  - `PackSetupStep` refactored to support adding multiple variants in a loop
+  - Update `getStepFlow()` to use new combined steps
+  - Pass `products` prop down to `BrandStep`
 
-**2. Auto-focus every field** — Every micro-step auto-focuses its primary input on mount (via `useEffect` + `ref.focus()`). The user never needs Tab.
-
-**3. Enter advances everything** — Pressing Enter on any field saves its value and calls `getNextStep()` to morph to the next screen. Empty Enter = skip (where allowed).
-
-**4. PLU auto-generation** — When reaching the PLU step, pre-fill with the next available PLU number (scan existing products for the highest PLU, increment by 1). User can accept with Enter or override.
-
-**5. Intertwined Purchase/Stock step** — A single "Achat" micro-step asks:
-- Number of packs purchased (e.g., 5)
-- Units per pack (e.g., 12)
-- Pack buying price (e.g., 600 DA)
-- Auto-calculates: total units (60), unit cost (50 DA)
-- All fields on one screen, Enter moves between them
-
-**6. Dynamic option expansion** — When user presses O/Y on "Sell by pack?", instead of just recording `true` and moving on, the wizard morphs into a pack configuration screen where they define pack sizes/names/prices. Same for wholesale (min qty + price fields) and expiration (date + quantity entry).
-
-**7. Per-mode step definitions** — Three separate step sequences defined as arrays of step IDs, with conditional insertions based on Y/N answers.
-
-### File changes
-
-**`src/components/management/ProductCreationWizard.tsx`** — Full rewrite (~700 lines):
-- Define ~15 micro-step components (type, name, categoryBrand, barcode, plu, purchase, unitPrice, weightPrice, margins, qPacks, packSetup, qExpiration, expirationSetup, qWholesale, wholesaleSetup, confirm)
-- State machine: `currentStepId` string, `history` stack for Esc/back
-- Each micro-step is a focused `motion.div` with auto-focused input
-- PLU auto-generation logic: scan `products` prop for max PLU, increment
-- Purchase step: intertwined pack qty / units-per-pack / pack price with live calculation
-- Confirmation step shows summary + "Save" (Enter) / "Save + New" (A)
-
-**`src/pages/management/ProductManagement.tsx`** — Pass `products` array to the wizard so it can compute next PLU.
+- **`src/pages/management/ProductManagement.tsx`** — Already passes `products`, no changes needed.
 
 ### No new dependencies needed
-Uses existing `framer-motion`, `lucide-react`, shadcn components.
 
