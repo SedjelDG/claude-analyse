@@ -7,7 +7,7 @@ import {
   Package, Truck, BarChart3, Plus, Search, Edit2, Trash2,
   ChevronDown, ChevronUp, Save, X, Scale, Tag, AlertTriangle,
   ScanBarcode, Calendar, Image as ImageIcon, Info, Keyboard,
-  ToggleLeft, Palette, ShoppingCart
+  ToggleLeft, Palette, ShoppingCart, Upload, Download
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,6 +22,7 @@ import { ScrollBar } from "@/components/ui/scroll-area";
 import { generateMockProducts, Product, ExpirationEntry, PackVariant } from "@/utils/mockProducts";
 import { ProductFormDialog, EditableProduct, emptyProduct } from "@/components/management/ProductFormDialog";
 import { ProductCreationWizard } from "@/components/management/ProductCreationWizard";
+import { ExportDialog, ImportDialog } from "@/components/management/ProductImportExport";
 
 const VirtualScrollArea = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>((props, ref) => (
   <ScrollAreaPrimitive.Root className="relative h-full w-full overflow-hidden radix-virtual-container">
@@ -105,6 +106,8 @@ const ProductManagement = () => {
   useEffect(() => { setProducts(generateMockProducts(20000)); }, []);
   const [showProductDialog, setShowProductDialog] = useState(false);
   const [showCreationWizard, setShowCreationWizard] = useState(false);
+  const [showExportDialog, setShowExportDialog] = useState(false);
+  const [showImportDialog, setShowImportDialog] = useState(false);
   const [editingProduct, setEditingProduct] = useState<EditableProduct>(emptyProduct);
   const [sortField, setSortField] = useState<keyof Product>("name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
@@ -163,6 +166,14 @@ const ProductManagement = () => {
     setProducts(prev => [product, ...prev]);
   };
 
+  const handleBulkImport = (imported: Partial<Product>[]) => {
+    const newProducts = imported.map((p, i) => ({
+      ...p,
+      id: `prod-import-${Date.now()}-${i}`,
+    } as Product));
+    setProducts(prev => [...newProducts, ...prev]);
+  };
+
   const statusColor = (s: string) =>
     s === "received" ? "bg-success/10 text-success" : s === "pending" ? "bg-warning/10 text-warning" : "bg-info/10 text-info";
 
@@ -205,9 +216,17 @@ const ProductManagement = () => {
           />
         </div>
         {activeTab === "products" && (
-          <Button onClick={openNewProduct} className="bg-primary text-primary-foreground hover:bg-primary/90">
-            <Plus className="h-4 w-4 mr-1" /> Nouveau produit
-          </Button>
+          <>
+            <Button variant="outline" onClick={() => setShowImportDialog(true)} className="gap-1.5">
+              <Upload className="h-4 w-4" /> Importer
+            </Button>
+            <Button variant="outline" onClick={() => setShowExportDialog(true)} className="gap-1.5">
+              <Download className="h-4 w-4" /> Exporter
+            </Button>
+            <Button onClick={openNewProduct} className="bg-primary text-primary-foreground hover:bg-primary/90">
+              <Plus className="h-4 w-4 mr-1" /> Nouveau produit
+            </Button>
+          </>
         )}
       </div>
 
@@ -508,6 +527,17 @@ const ProductManagement = () => {
           onSave={handleWizardSave}
           products={products}
         />
+      <ExportDialog
+        open={showExportDialog}
+        onClose={() => setShowExportDialog(false)}
+        products={products}
+      />
+      <ImportDialog
+        open={showImportDialog}
+        onClose={() => setShowImportDialog(false)}
+        onImport={handleBulkImport}
+        existingProducts={products}
+      />
     </div>
   );
 };
