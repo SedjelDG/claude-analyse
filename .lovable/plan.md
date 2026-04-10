@@ -1,39 +1,60 @@
 
 
-## Plan: Wizard Refinements — 5 Enhancements
+## Plan: Scale Button Layout Overlay with Drag-and-Drop
 
-### Changes
+### What we're building
+A visual overlay on the Scale/PLU page that renders a realistic grid of scale buttons (like a physical scale's keypad). Users can drag products onto buttons, rearrange them by dragging between slots, and remove them — all with spring animations and "plop-in" effects.
 
-**1. Category "Autres" → custom input**
-- In `CategoryStep`, when user selects "Autres", morph into a text input for typing a custom category name instead of immediately advancing.
+### Design
 
-**2. Brand step → searchable list first**
-- Replace the plain `SingleInputStep` for brand with a new `BrandStep` that extracts unique brands from the `products` prop, displays them as a selectable list (like categories), and includes a text input at the bottom for typing a new brand. Arrow keys navigate existing brands, typing filters/creates new.
+```text
+┌─────────────────────────────────────────────────┐
+│  [Disposition des touches]  toggle button        │
+├─────────────────────────────────────────────────┤
+│                                                  │
+│   ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐ │
+│   │ 001  │ │ 002  │ │ 003  │ │ 004  │ │ 005  │ │
+│   │Pommes│ │Banan.│ │      │ │Olives│ │      │ │
+│   │250DA │ │350DA │ │ vide │ │500DA │ │ vide │ │
+│   └──────┘ └──────┘ └──────┘ └──────┘ └──────┘ │
+│   ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐ │
+│   │ 006  │ │      │ │      │ │      │ │      │ │
+│   │Poulet│ │ vide │ │ vide │ │ vide │ │ vide │ │
+│   │450DA │ │      │ │      │ │      │ │      │ │
+│   └──────┘ └──────┘ └──────┘ └──────┘ └──────┘ │
+│                                                  │
+│   Unassigned products sidebar (draggable pool)   │
+│   ┌────────┐ ┌────────┐ ┌────────┐              │
+│   │Fromage │ │V.hachée│ │  ...   │              │
+│   └────────┘ └────────┘ └────────┘              │
+└─────────────────────────────────────────────────┘
+```
 
-**3. Purchase/Stock mode choice (units vs packs)**
-- Before the `PurchaseStep`, add a quick Y/N-style choice: "Achat par colis ou par unités ?" If "units", show a simpler 2-field screen (quantity + unit cost). If "packs", show the current intertwined packs screen (packs bought × units per pack × pack price).
+### Implementation
 
-**4. Combined Finance + Stock screen**
-- Merge purchase, sale price, weight price (for mixte), and margins into one large panel with all fields visible. Auto-focus walks through them sequentially via Enter: cost fields → sale price → weight price (if mixte) → stock display. The user sees all financial context at once while filling each field.
-- Remove the separate `unitPrice`, `weightPrice`, `pricePerKg`, `costPerKg`, and `margins` micro-steps — fold them into this combined step.
+**New component: `ScaleButtonLayout.tsx`**
+- A grid of button slots (configurable, default 5×4 = 20 keys)
+- Each slot is either empty or occupied by a product
+- State: `buttonMap: Record<number, string | null>` mapping slot index → product ID
+- Uses `framer-motion` `layout`, `layoutId`, and spring animations for:
+  - **Plop-in**: `scale: [0, 1.1, 1]` with spring when a product lands on a slot
+  - **Drag**: `drag` prop on product chips, `onDragEnd` detects target slot via hit-testing
+  - **Remove**: scale-out animation when clearing a slot
+- Unassigned products shown in a pool below the grid, also draggable
+- Right-click or X button to clear a slot
+- Grid size adjustable (rows × cols selector)
 
-**5. Multiple barcodes + multiple pack variants**
-- **Barcodes**: After scanning one barcode, show a "+ Ajouter un code-barres" hint (press `+` or `Tab`). Each additional barcode gets its own input row. Enter on the last one advances.
-- **Pack variants**: After configuring one pack variant, show "Ajouter un autre pack ?" (O/N). Pressing O resets the pack fields and lets them define another variant (e.g., Pack de 6 AND Pack de 12). All variants are listed as chips above the input.
+**Changes to `ScaleIntegration.tsx`**
+- Add a toggle button "Disposition des touches" that shows/hides the `ScaleButtonLayout` overlay
+- Pass `products` and `setProducts` to the layout component
+- Products dragged onto buttons get their PLU auto-assigned to the slot number
+
+### Drag implementation (no new deps)
+Using `framer-motion`'s `drag` + manual hit-testing via `onDragEnd` with `document.elementsFromPoint()` to detect which slot the product was dropped on. This avoids needing `@dnd-kit` or `react-beautiful-dnd`.
 
 ### Files
+- **Create** `src/components/management/ScaleButtonLayout.tsx` (~350 lines)
+- **Edit** `src/pages/management/ScaleIntegration.tsx` — add toggle + render `ScaleButtonLayout`
 
-- **`src/components/management/ProductCreationWizard.tsx`** — Major edits:
-  - `CategoryStep`: add custom input mode when "Autres" selected
-  - New `BrandStep` component with product-derived brand list + free text
-  - New `StockModeStep` (units vs packs choice)
-  - New `CombinedFinanceStep` replacing 4-5 separate price/margin steps
-  - `BarcodeStep` replacing single barcode input — supports multiple entries
-  - `PackSetupStep` refactored to support adding multiple variants in a loop
-  - Update `getStepFlow()` to use new combined steps
-  - Pass `products` prop down to `BrandStep`
-
-- **`src/pages/management/ProductManagement.tsx`** — Already passes `products`, no changes needed.
-
-### No new dependencies needed
+### No new dependencies
 
