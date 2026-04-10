@@ -106,6 +106,8 @@ const ProductManagement = () => {
   useEffect(() => { setProducts(generateMockProducts(20000)); }, []);
   const [showProductDialog, setShowProductDialog] = useState(false);
   const [showCreationWizard, setShowCreationWizard] = useState(false);
+  const [showExportDialog, setShowExportDialog] = useState(false);
+  const [showImportDialog, setShowImportDialog] = useState(false);
   const [editingProduct, setEditingProduct] = useState<EditableProduct>(emptyProduct);
   const [sortField, setSortField] = useState<keyof Product>("name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
