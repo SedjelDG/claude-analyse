@@ -22,6 +22,7 @@ import { ScrollBar } from "@/components/ui/scroll-area";
 import { generateMockProducts, Product, ExpirationEntry, PackVariant } from "@/utils/mockProducts";
 import { ProductFormDialog, EditableProduct, emptyProduct } from "@/components/management/ProductFormDialog";
 import { ProductCreationWizard } from "@/components/management/ProductCreationWizard";
+import { ExportDialog, ImportDialog } from "@/components/management/ProductImportExport";
 
 const VirtualScrollArea = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>((props, ref) => (
   <ScrollAreaPrimitive.Root className="relative h-full w-full overflow-hidden radix-virtual-container">
