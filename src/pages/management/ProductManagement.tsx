@@ -166,6 +166,14 @@ const ProductManagement = () => {
     setProducts(prev => [product, ...prev]);
   };
 
+  const handleBulkImport = (imported: Partial<Product>[]) => {
+    const newProducts = imported.map((p, i) => ({
+      ...p,
+      id: `prod-import-${Date.now()}-${i}`,
+    } as Product));
+    setProducts(prev => [...newProducts, ...prev]);
+  };
+
   const statusColor = (s: string) =>
     s === "received" ? "bg-success/10 text-success" : s === "pending" ? "bg-warning/10 text-warning" : "bg-info/10 text-info";
 
