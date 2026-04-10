@@ -527,6 +527,17 @@ const ProductManagement = () => {
           onSave={handleWizardSave}
           products={products}
         />
+      <ExportDialog
+        open={showExportDialog}
+        onClose={() => setShowExportDialog(false)}
+        products={products}
+      />
+      <ImportDialog
+        open={showImportDialog}
+        onClose={() => setShowImportDialog(false)}
+        onImport={handleBulkImport}
+        existingProducts={products}
+      />
     </div>
   );
 };
