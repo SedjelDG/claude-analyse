@@ -216,9 +216,17 @@ const ProductManagement = () => {
           />
         </div>
         {activeTab === "products" && (
-          <Button onClick={openNewProduct} className="bg-primary text-primary-foreground hover:bg-primary/90">
-            <Plus className="h-4 w-4 mr-1" /> Nouveau produit
-          </Button>
+          <>
+            <Button variant="outline" onClick={() => setShowImportDialog(true)} className="gap-1.5">
+              <Upload className="h-4 w-4" /> Importer
+            </Button>
+            <Button variant="outline" onClick={() => setShowExportDialog(true)} className="gap-1.5">
+              <Download className="h-4 w-4" /> Exporter
+            </Button>
+            <Button onClick={openNewProduct} className="bg-primary text-primary-foreground hover:bg-primary/90">
+              <Plus className="h-4 w-4 mr-1" /> Nouveau produit
+            </Button>
+          </>
         )}
       </div>
 
