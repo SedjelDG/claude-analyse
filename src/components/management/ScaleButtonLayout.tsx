@@ -20,12 +20,12 @@ interface ScaleButtonLayoutProps {
   onUpdateProducts: (products: ScaleProduct[]) => void;
 }
 
-const springTransition = { type: "spring", stiffness: 500, damping: 30 };
+const springTransition = { type: "spring" as const, stiffness: 500, damping: 30 };
 const plopIn = {
   initial: { scale: 0, opacity: 0 },
   animate: { scale: [0, 1.12, 1], opacity: 1 },
   exit: { scale: 0, opacity: 0 },
-  transition: { ...springTransition, scale: { times: [0, 0.6, 1], duration: 0.4 } },
+  transition: { type: "spring" as const, stiffness: 500, damping: 30, scale: { times: [0, 0.6, 1], duration: 0.4 } },
 };
 
 const ScaleButtonLayout = ({ products, onUpdateProducts }: ScaleButtonLayoutProps) => {

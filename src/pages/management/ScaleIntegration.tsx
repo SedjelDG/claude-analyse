@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { motion } from "framer-motion";
-import { Scale, Search, Upload, Download, RefreshCw, Settings, Tag, Check, AlertCircle } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Scale, Search, Upload, Download, Tag, Check, AlertCircle, LayoutGrid } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import ScaleButtonLayout from "@/components/management/ScaleButtonLayout";
 
 interface ScaleProduct {
   id: string;
@@ -29,6 +30,7 @@ const mockScaleProducts: ScaleProduct[] = [
 const ScaleIntegration = () => {
   const [search, setSearch] = useState("");
   const [products, setProducts] = useState(mockScaleProducts);
+  const [showLayout, setShowLayout] = useState(false);
 
   const filtered = products.filter(
     (p) => p.name.toLowerCase().includes(search.toLowerCase()) || p.plu.includes(search)
@@ -60,6 +62,14 @@ const ScaleIntegration = () => {
           </p>
         </div>
         <div className="flex gap-2">
+          <Button
+            variant={showLayout ? "default" : "outline"}
+            onClick={() => setShowLayout((v) => !v)}
+            className={showLayout ? "" : "border-primary/50 text-primary"}
+          >
+            <LayoutGrid className="h-4 w-4 mr-1" />
+            Disposition des touches
+          </Button>
           <Button variant="outline" className="border-primary text-primary" onClick={syncAll}>
             <Upload className="h-4 w-4 mr-1" /> Synchroniser
           </Button>
@@ -68,6 +78,13 @@ const ScaleIntegration = () => {
           </Button>
         </div>
       </div>
+
+      {/* Scale Button Layout Overlay */}
+      <AnimatePresence>
+        {showLayout && (
+          <ScaleButtonLayout products={products} onUpdateProducts={setProducts} />
+        )}
+      </AnimatePresence>
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
@@ -150,7 +167,7 @@ const ScaleIntegration = () => {
       <div className="pos-card p-4 border-l-4 border-info">
         <h4 className="font-semibold text-foreground text-sm mb-1">💡 Comment ajouter un produit à la balance ?</h4>
         <p className="text-xs text-muted-foreground leading-relaxed">
-          Dans la section <strong>Gestion des produits</strong>, activez l'option "Inclure dans la balance électronique" 
+          Dans la section <strong>Gestion des produits</strong>, activez l'option "Inclure dans la balance électronique"
           et assignez un code PLU au produit. Il apparaîtra automatiquement ici pour la synchronisation avec votre balance.
         </p>
       </div>
