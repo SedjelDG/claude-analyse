@@ -7,7 +7,7 @@ import {
   Package, Truck, BarChart3, Plus, Search, Edit2, Trash2,
   ChevronDown, ChevronUp, Save, X, Scale, Tag, AlertTriangle,
   ScanBarcode, Calendar, Image as ImageIcon, Info, Keyboard,
-  ToggleLeft, Palette, ShoppingCart
+  ToggleLeft, Palette, ShoppingCart, Upload, Download
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
