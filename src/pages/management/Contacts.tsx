@@ -1,32 +1,12 @@
 import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Users, Truck, Plus, Search, Edit2, Trash2, Save, X, Phone, Mail, MapPin, FileText } from "lucide-react";
+import { motion } from "framer-motion";
+import { Users, Truck, Plus, Search, Edit2, Trash2, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-
-type ContactType = "supplier" | "client";
-
-interface Contact {
-  id: string;
-  type: ContactType;
-  name: string;
-  phone: string;
-  email: string;
-  address: string;
-  notes: string;
-  balance: number;
-}
-
-const mockContacts: Contact[] = [
-  { id: "s1", type: "supplier", name: "Fournisseur A", phone: "0555 11 22 33", email: "a@fournisseur.dz", address: "Alger", notes: "Livraison rapide", balance: 0 },
-  { id: "s2", type: "supplier", name: "Fournisseur B", phone: "0555 44 55 66", email: "b@fournisseur.dz", address: "Oran", notes: "", balance: -15000 },
-  { id: "s3", type: "supplier", name: "Fournisseur C", phone: "0555 77 88 99", email: "", address: "Constantine", notes: "Fruits et légumes", balance: 0 },
-  { id: "c1", type: "client", name: "Client Gros A", phone: "0666 11 22 33", email: "client.a@mail.dz", address: "Alger", notes: "Paiement mensuel", balance: 25000 },
-  { id: "c2", type: "client", name: "Client Gros B", phone: "0666 44 55 66", email: "", address: "Blida", notes: "", balance: -5000 },
-];
+import { useContacts, Contact, ContactType } from "@/hooks/useContacts";
 
 const emptyContact: Omit<Contact, "id"> = {
   type: "supplier", name: "", phone: "", email: "", address: "", notes: "", balance: 0,
@@ -34,8 +14,8 @@ const emptyContact: Omit<Contact, "id"> = {
 
 const Contacts = () => {
   const { toast } = useToast();
+  const { contacts, addContact, updateContact, removeContact } = useContacts();
   const [tab, setTab] = useState<ContactType>("supplier");
-  const [contacts, setContacts] = useState(mockContacts);
   const [search, setSearch] = useState("");
   const [showDialog, setShowDialog] = useState(false);
   const [editing, setEditing] = useState<(Omit<Contact, "id"> & { id?: string })>(emptyContact);
@@ -56,17 +36,17 @@ const Contacts = () => {
 
   const save = () => {
     if (editing.id) {
-      setContacts((prev) => prev.map((c) => c.id === editing.id ? { ...editing, id: c.id } as Contact : c));
+      updateContact(editing.id, editing);
       toast({ title: "Contact modifié" });
     } else {
-      setContacts((prev) => [...prev, { ...editing, id: `${tab[0]}${Date.now()}` } as Contact]);
+      addContact(editing);
       toast({ title: "Contact ajouté" });
     }
     setShowDialog(false);
   };
 
   const remove = (id: string) => {
-    setContacts((prev) => prev.filter((c) => c.id !== id));
+    removeContact(id);
     toast({ title: "Contact supprimé" });
   };
 
