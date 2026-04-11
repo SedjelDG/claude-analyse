@@ -6,16 +6,23 @@ import {
   CreditCard, Pause, Hash, Wallet, DoorOpen, PiggyBank, User,
   Gift, X, Power, Clock, CalendarDays, Barcode,
   Banknote, CreditCard as CardIcon, Settings, LogOut, Globe,
-  PackageOpen, Shield, Play, Receipt
+  PackageOpen, Shield, Play, Receipt, Tag, ShoppingCart
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useTranslation } from "@/hooks/useTranslation";
 import { useUserStore, STANDARD_CASHIER } from "@/hooks/useUserStore";
 import { useSettings, DEFAULT_HOTKEYS } from "@/hooks/useSettings";
 import { useCashRegister } from "@/hooks/useCashRegister";
+import { useContacts, Contact } from "@/hooks/useContacts";
 import RegisterSearchBar from "@/components/register/RegisterSearchBar";
 import SalesHistoryDialog from "@/components/register/SalesHistoryDialog";
+import TreasuryHub from "@/components/register/TreasuryHub";
+import CartsManager from "@/components/register/CartsManager";
+import ClientAssociation from "@/components/register/ClientAssociation";
+import LabelPreview from "@/components/register/LabelPreview";
+import PackCyclePopover from "@/components/register/PackCyclePopover";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { toast as sonnerToast } from "sonner";
 
 interface CartItem {
   id: string;
@@ -23,10 +30,11 @@ interface CartItem {
   quantity: number;
   price: number;
   barcode?: string;
-  packVariantIndex?: number; // -1 = unit, 0+ = pack variant index
+  packVariantIndex?: number;
   packSize: number;
   originalName?: string;
   originalPrice?: number;
+  isReturn?: boolean;
 }
 
 const initialCart: CartItem[] = [
@@ -63,6 +71,13 @@ const shortcutProducts: Record<string, { name: string; price: number }> = {
   p13: { name: "Yaourt", price: 45 },
 };
 
+// Pack variants lookup (mock — in production from DB)
+const PACK_VARIANTS: Record<string, { size: number; name: string; price: number }[]> = {
+  "Lait 1L": [{ size: 6, name: "Pack 6", price: 550 }, { size: 12, name: "Carton 12", price: 1050 }],
+  "Eau 1.5L": [{ size: 6, name: "Pack 6", price: 140 }],
+  "Yaourt": [{ size: 4, name: "Pack 4", price: 160 }, { size: 12, name: "Carton 12", price: 450 }],
+};
+
 const ALL_ACTION_BUTTONS = [
   { key: "action.add", icon: Plus },
   { key: "action.deduct", icon: Minus },
@@ -84,6 +99,8 @@ const ALL_ACTION_BUTTONS = [
   { key: "action.client", icon: User },
   { key: "action.packCycle", icon: PackageOpen },
   { key: "action.salesHistory", icon: Receipt },
+  { key: "action.carts", icon: ShoppingCart },
+  { key: "action.label", icon: Tag },
 ];
 
 const Register = () => {
@@ -94,6 +111,7 @@ const Register = () => {
   const activeUser = currentUser || STANDARD_CASHIER;
   const { settings, getHotkeys, updateSettings } = useSettings(activeUser.id);
   const { balance: cashBalance, addMovement } = useCashRegister();
+  const { addCredit } = useContacts();
 
   // Multi-client carts
   const [clientCarts, setClientCarts] = useState<Record<number, CartItem[]>>({
@@ -118,6 +136,20 @@ const Register = () => {
   const [cashNote, setCashNote] = useState("");
   const [salesHistoryOpen, setSalesHistoryOpen] = useState(false);
 
+  // New feature dialogs
+  const [treasuryOpen, setTreasuryOpen] = useState(false);
+  const [treasuryTab, setTreasuryTab] = useState<"cash" | "zreport" | "shift">("cash");
+  const [cartsManagerOpen, setCartsManagerOpen] = useState(false);
+  const [clientAssocOpen, setClientAssocOpen] = useState(false);
+  const [labelPreviewOpen, setLabelPreviewOpen] = useState(false);
+  const [packCycleOpen, setPackCycleOpen] = useState(false);
+  const [packCycleAnchor, setPackCycleAnchor] = useState<DOMRect | null>(null);
+
+  // Per-cart assigned clients
+  const [assignedClients, setAssignedClients] = useState<Record<number, Contact | null>>({
+    1: null, 2: null, 3: null, 4: null, 5: null, 6: null,
+  });
+
   const cart = clientCarts[activeClient] || [];
   const updateCart = useCallback((updater: (prev: CartItem[]) => CartItem[]) => {
     setClientCarts((prev) => ({
@@ -131,7 +163,11 @@ const Register = () => {
     return () => clearInterval(interval);
   }, []);
 
-  const total = cart.reduce((s, i) => s + i.quantity * i.price, 0);
+  // Total calculation with return support
+  const total = cart.reduce((s, i) => {
+    const lineTotal = i.quantity * i.price;
+    return s + (i.isReturn ? -lineTotal : lineTotal);
+  }, 0);
   const discountAmount = total * (discount / 100);
   const totalTTC = total - discountAmount;
   const dateStr = now.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" });
@@ -152,7 +188,7 @@ const Register = () => {
           name: product.name,
           price: product.price,
           quantity: product.quantity || 1,
-          originalPrice: product.price, // Store the base price for discounts
+          originalPrice: product.price,
           originalName: product.name,
           packVariantIndex: -1,
           packSize: 1,
@@ -172,6 +208,11 @@ const Register = () => {
       return prev.filter((item) => item.id !== productId);
     });
   }, [updateCart]);
+
+  // Selected item data for features
+  const selectedItem = cart.find((i) => i.id === selectedItemId);
+  const selectedBaseName = selectedItem?.originalName || selectedItem?.name || "";
+  const selectedVariants = PACK_VARIANTS[selectedBaseName] || [];
 
   const actions: Record<string, () => void> = {
     "action.add": () => {
@@ -200,14 +241,22 @@ const Register = () => {
     },
     "action.lock": () => { setIsLocked(true); toast({ title: t("toast.locked") }); },
     "action.discount": () => setDiscountDialog(true),
+    // ── Refund / Return Logic ──
     "action.return": () => {
       if (!selectedItemId) { toast({ title: t("toast.noItemSelected"), description: t("toast.selectItem") }); return; }
       const item = cart.find((i) => i.id === selectedItemId);
-      if (item) {
-        updateCart((prev) => prev.filter((i) => i.id !== selectedItemId));
-        setSelectedItemId(null);
-        toast({ title: t("toast.returnProcessed"), description: item.name });
-      }
+      if (!item) return;
+      // Toggle return status
+      updateCart((prev) =>
+        prev.map((i) =>
+          i.id === selectedItemId ? { ...i, isReturn: !i.isReturn } : i
+        )
+      );
+      const willBeReturn = !item.isReturn;
+      toast({
+        title: willBeReturn ? "Retour marqué" : "Retour annulé",
+        description: item.name,
+      });
     },
     "action.payment": () => setPaymentDialog(true),
     "action.hold": () => { toast({ title: t("toast.transactionHeld"), description: `Client N°${activeClient}` }); },
@@ -215,10 +264,10 @@ const Register = () => {
       if (!selectedItemId) { toast({ title: t("toast.noItemSelected"), description: t("toast.selectItem") }); return; }
       setQuantityDialog(true);
     },
-    "action.deposit": () => setCashDialog("add"),
-    "action.drawer": () => setCashDialog("remove"),
-    "action.treasury": () => { toast({ title: t("action.treasury"), description: "..." }); },
-    "action.client": () => { toast({ title: t("action.client"), description: `Client N°${activeClient}` }); },
+    "action.deposit": () => { setTreasuryTab("cash"); setTreasuryOpen(true); },
+    "action.drawer": () => { setTreasuryTab("cash"); setTreasuryOpen(true); },
+    "action.treasury": () => { setTreasuryTab("zreport"); setTreasuryOpen(true); },
+    "action.client": () => setClientAssocOpen(true),
     "action.gift": () => {
       if (!selectedItemId) { toast({ title: t("toast.noItemSelected"), description: t("toast.selectItem") }); return; }
       const item = cart.find((i) => i.id === selectedItemId);
@@ -242,36 +291,56 @@ const Register = () => {
       updateSettings({ language: newLang });
       toast({ title: newLang === "fr" ? "Français" : "English" });
     },
+    // ── Dynamic Pack Cycling ──
     "action.packCycle": () => {
       if (!selectedItemId) { toast({ title: t("toast.noItemSelected"), description: t("toast.selectItem") }); return; }
       const item = cart.find((i) => i.id === selectedItemId);
       if (!item) return;
-      // Look up pack variants from mock data (in production this would come from a product DB)
-      const mockPackVariants: Record<string, { size: number; name: string; price: number }[]> = {
-        "Lait 1L": [{ size: 6, name: "Pack 6", price: 550 }, { size: 12, name: "Carton 12", price: 1050 }],
-        "Eau 1.5L": [{ size: 6, name: "Pack 6", price: 140 }],
-      };
       const baseName = item.originalName || item.name;
-      const variants = mockPackVariants[baseName];
-      if (!variants || variants.length === 0) { toast({ title: "Pas de variantes", description: baseName }); return; }
-      const currentIdx = item.packVariantIndex ?? -1;
-      const nextIdx = currentIdx + 1 >= variants.length ? -1 : currentIdx + 1;
-      const currentTotalUnits = item.quantity * (item.packSize || 1);
-      
-      if (nextIdx === -1) {
-        // Back to unit
-        const newQty = currentTotalUnits; 
-        updateCart((prev) => prev.map((i) => i.id === selectedItemId ? { ...i, name: baseName, quantity: newQty, price: item.originalPrice || item.price, packVariantIndex: -1, packSize: 1, originalName: baseName } : i));
-        toast({ title: t("action.packCycle"), description: `${baseName} (${newQty} unités)` });
-      } else {
-        const v = variants[nextIdx];
-        const origPrice = item.originalPrice || item.price;
-        const newQty = Math.max(1, Math.floor(currentTotalUnits / v.size));
-        updateCart((prev) => prev.map((i) => i.id === selectedItemId ? { ...i, name: `${baseName} (${v.name})`, quantity: newQty, price: v.price, packVariantIndex: nextIdx, packSize: v.size, originalName: baseName, originalPrice: origPrice } : i));
-        toast({ title: t("action.packCycle"), description: `${v.name} (Qté: ${newQty})` });
+      const variants = PACK_VARIANTS[baseName];
+      if (!variants || variants.length === 0) {
+        sonnerToast.error("Aucune variante", { description: baseName });
+        return;
       }
+      // Get anchor rect for positioning
+      const row = document.querySelector(`[data-item-id="${selectedItemId}"]`);
+      if (row) setPackCycleAnchor(row.getBoundingClientRect());
+      setPackCycleOpen(true);
     },
     "action.salesHistory": () => setSalesHistoryOpen(true),
+    "action.carts": () => setCartsManagerOpen(true),
+    "action.label": () => {
+      if (!selectedItemId) { toast({ title: t("toast.noItemSelected"), description: t("toast.selectItem") }); return; }
+      setLabelPreviewOpen(true);
+    },
+  };
+
+  const handlePackSelect = (variantIndex: number) => {
+    if (!selectedItem) return;
+    const baseName = selectedItem.originalName || selectedItem.name;
+    const currentTotalUnits = selectedItem.quantity * (selectedItem.packSize || 1);
+
+    if (variantIndex === -1) {
+      // Back to unit
+      updateCart((prev) =>
+        prev.map((i) =>
+          i.id === selectedItemId
+            ? { ...i, name: baseName, quantity: currentTotalUnits, price: selectedItem.originalPrice || selectedItem.price, packVariantIndex: -1, packSize: 1, originalName: baseName }
+            : i
+        )
+      );
+    } else {
+      const v = selectedVariants[variantIndex];
+      const origPrice = selectedItem.originalPrice || selectedItem.price;
+      const newQty = Math.max(1, Math.floor(currentTotalUnits / v.size));
+      updateCart((prev) =>
+        prev.map((i) =>
+          i.id === selectedItemId
+            ? { ...i, name: `${baseName} (${v.name})`, quantity: newQty, price: v.price, packVariantIndex: variantIndex, packSize: v.size, originalName: baseName, originalPrice: origPrice }
+            : i
+        )
+      );
+    }
   };
 
   const userHotkeys = getHotkeys();
@@ -294,30 +363,23 @@ const Register = () => {
           const code = barcodeBuffer.current;
           let handled = false;
 
-          // ── Smart Barcode Parser (Scale Interceptor) ──
           const scaleSettings = settings.hardware?.barcodeScale;
           if (scaleSettings?.enabled && code.length === 13 && code.startsWith(scaleSettings.prefix || "20")) {
-            const plu = code.substring(2, 6); // 4-digit PLU
-            const weightPrm = code.substring(6, 11); // 5-digit weight (01500 = 1.500kg)
+            const plu = code.substring(2, 6);
+            const weightPrm = code.substring(6, 11);
             const weight = parseInt(weightPrm, 10) / 1000;
-            
-            // Mocking PLU lookup until Database is active
             const foundNode = Object.values(shortcutProducts).find((p: any) => p.barcode === code || p.id === plu);
-            const found = foundNode || { name: `Article Pesé (PLU: ${plu})`, price: 450, barcode: code }; // 450 DA/kg mock
-              
-            // In a real POS, if the scale embeds WEIGHT, total = price * weight
-            // Here we pass the precise parsed weight directly into the quantity field
+            const found = foundNode || { name: `Article Pesé (PLU: ${plu})`, price: 450, barcode: code };
             addProductToCart({ ...found, quantity: weight });
             handled = true;
           }
 
           if (!handled) {
-            // Standard Barcode Lookup
             const foundNode = Object.values(shortcutProducts).find((p: any) => p.barcode === code || p.name.includes(code));
             const found = foundNode || { name: `Article ${code}`, price: Math.floor(Math.random() * 500) + 50, barcode: code };
             addProductToCart(found);
           }
-          
+
           e.preventDefault();
           e.stopPropagation();
         }
@@ -356,12 +418,10 @@ const Register = () => {
         const key = shortcutMap[combo];
         if (key && actions[key]) { e.preventDefault(); actions[key](); return; }
       }
-      // Fix: Check the duration BEFORE the current key was processed by the interceptor
-      // If the buffer has content and we just got a key, the interceptor just updated lastKeyTime.
-      // So we check if the PREVIOUS gap was fast.
       const isActuallyScanning = barcodeBuffer.current.length > 0;
-      
+
       if (!searchOpen && !quantityDialog && !discountDialog && !paymentDialog && !cashDialog &&
+        !treasuryOpen && !cartsManagerOpen && !clientAssocOpen && !labelPreviewOpen && !packCycleOpen &&
         e.key.length === 1 && /[a-zA-Z0-9]/.test(e.key) && !e.ctrlKey && !e.altKey && !isActuallyScanning) {
         setSearchOpen(true);
       }
@@ -395,11 +455,29 @@ const Register = () => {
     setDiscountValue("");
   };
 
-  const processPayment = (method: "cash" | "card") => {
-    if (method === "cash") {
-      addMovement({ type: "sale", amount: totalTTC, note: `Vente Client N°${activeClient}`, userId: activeUser.id, userName: activeUser.name });
+  const processPayment = (method: "cash" | "card" | "credit") => {
+    if (method === "credit") {
+      const client = assignedClients[activeClient];
+      if (!client) {
+        toast({ title: "Aucun client associé", description: "Associez un client pour payer à crédit" });
+        setClientAssocOpen(true);
+        return;
+      }
+      // Log credit against client
+      addCredit(client.id, totalTTC);
+      toast({ title: "Crédit enregistré", description: `${totalTTC.toFixed(2)} DA → ${client.name}` });
+    } else if (method === "cash") {
+      // Record sales and returns separately
+      const salesTotal = cart.filter((i) => !i.isReturn).reduce((s, i) => s + i.quantity * i.price, 0);
+      const returnsTotal = cart.filter((i) => i.isReturn).reduce((s, i) => s + i.quantity * i.price, 0);
+      if (salesTotal > 0) {
+        addMovement({ type: "sale", amount: salesTotal, note: `Vente Client N°${activeClient}`, userId: activeUser.id, userName: activeUser.name });
+      }
+      if (returnsTotal > 0) {
+        addMovement({ type: "return", amount: returnsTotal, note: `Retour Client N°${activeClient}`, userId: activeUser.id, userName: activeUser.name });
+      }
     }
-    toast({ title: t("toast.paymentProcessed"), description: `${totalTTC.toFixed(2)} DA — ${method === "cash" ? t("dialog.payment.cash") : t("dialog.payment.card")}` });
+    toast({ title: t("toast.paymentProcessed"), description: `${totalTTC.toFixed(2)} DA — ${method === "cash" ? t("dialog.payment.cash") : method === "card" ? t("dialog.payment.card") : "Crédit"}` });
     updateCart(() => []);
     setSelectedItemId(null);
     setDiscount(0);
@@ -451,6 +529,8 @@ const Register = () => {
       "action.stop": { text: "text-[#000000]", bg: "bg-[#000000]", border: "border-[#000000]/40" },
       "action.packCycle": { text: "text-[#dc2626]", bg: "bg-[#dc2626]", border: "border-[#dc2626]/40" },
       "action.salesHistory": { text: "text-[#6366f1]", bg: "bg-[#6366f1]", border: "border-[#6366f1]/40" },
+      "action.carts": { text: "text-[#059669]", bg: "bg-[#059669]", border: "border-[#059669]/40" },
+      "action.label": { text: "text-[#8b5cf6]", bg: "bg-[#8b5cf6]", border: "border-[#8b5cf6]/40" },
     };
     return themes[actionKey] || { text: "text-primary", bg: "bg-primary", border: "border-primary/40" };
   };
@@ -525,12 +605,10 @@ const Register = () => {
       cancelAnimationFrame(rafId.current);
       rafId.current = requestAnimationFrame(() => {
         if (isDragging.current === "right") {
-          // dragging left = right panel grows
           const delta = dragStartX.current - e.clientX;
           const next = Math.min(PANEL_MAX, Math.max(PANEL_MIN, dragStartWidth.current + delta));
           setPanelWidth(next);
         } else if (isDragging.current === "left") {
-          // dragging right = left panel grows
           const delta = e.clientX - dragStartX.current;
           const next = Math.min(LEFT_PANEL_MAX, Math.max(LEFT_PANEL_MIN, dragStartWidth.current + delta));
           setLeftPanelWidth(next);
@@ -558,7 +636,6 @@ const Register = () => {
     };
   }, []);
 
-  // Derive columns and scale from panel width — fully memoized
   const { panelCols, btnScale, headerScale, leftPanelScale } = useMemo(() => {
     let cols: number;
     if (panelWidth < 210) cols = 1;
@@ -566,18 +643,14 @@ const Register = () => {
     else if (panelWidth < 550) cols = 3;
     else if (panelWidth < 700) cols = 4;
     else cols = 5;
-    // Baseline: 260px / 3 cols = ~87px per button = scale 1.0
     const btnW = panelWidth / cols;
     const bs = Math.min(1.45, Math.max(0.75, btnW / 87));
-
-    // Damped header scale: even more conservative now
     const hs = Math.min(1.25, Math.max(0.85, 1 + (bs - 1) * 0.35));
-
-    // Left panel scale: baseline 240px
     const lps = Math.min(1.3, Math.max(0.85, 1 + (leftPanelWidth / 240 - 1) * 0.4));
-
     return { panelCols: cols, btnScale: bs, headerScale: hs, leftPanelScale: lps };
   }, [panelWidth, leftPanelWidth]);
+
+  const currentAssignedClient = assignedClients[activeClient];
 
   return (
     <>
@@ -631,21 +704,30 @@ const Register = () => {
         )}
       </AnimatePresence>
 
-      {/* PAYMENT DIALOG */}
+      {/* PAYMENT DIALOG — now with Credit option */}
       <AnimatePresence>
         {paymentDialog && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-40 bg-black/40 flex items-center justify-center">
-            <motion.div initial={{ scale: 0.9, y: 10 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 10 }} className="bg-card p-5 w-[320px] border border-register-border">
+            <motion.div initial={{ scale: 0.9, y: 10 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 10 }} className="bg-card p-5 w-[380px] border border-register-border">
               <h3 className="text-sm font-bold text-foreground mb-1">{t("dialog.payment.title")}</h3>
-              <p className="text-[11px] text-muted-foreground mb-4">{t("dialog.payment.total")}: <span className="font-bold text-foreground">{totalTTC.toFixed(2)} DA</span></p>
-              <div className="flex gap-2 mb-3">
-                <button onClick={() => processPayment("cash")} className="flex-1 flex flex-col items-center gap-1 py-4 bg-success text-success-foreground hover:brightness-110 transition-all active:scale-95">
+              <p className="text-[11px] text-muted-foreground mb-1">{t("dialog.payment.total")}: <span className="font-bold text-foreground">{totalTTC.toFixed(2)} DA</span></p>
+              {currentAssignedClient && (
+                <p className="text-[10px] text-primary mb-3 flex items-center gap-1">
+                  <User className="h-3 w-3" /> {currentAssignedClient.name}
+                </p>
+              )}
+              <div className="flex gap-2 mb-2">
+                <button onClick={() => processPayment("cash")} className="flex-1 flex flex-col items-center gap-1 py-4 bg-emerald-500 text-white hover:brightness-110 transition-all active:scale-95 rounded">
                   <Banknote className="h-6 w-6" />
                   <span className="text-[10px] font-bold uppercase">{t("dialog.payment.cash")}</span>
                 </button>
-                <button onClick={() => processPayment("card")} className="flex-1 flex flex-col items-center gap-1 py-4 bg-info text-info-foreground hover:brightness-110 transition-all active:scale-95">
+                <button onClick={() => processPayment("card")} className="flex-1 flex flex-col items-center gap-1 py-4 bg-blue-500 text-white hover:brightness-110 transition-all active:scale-95 rounded">
                   <CreditCard className="h-6 w-6" />
                   <span className="text-[10px] font-bold uppercase">{t("dialog.payment.card")}</span>
+                </button>
+                <button onClick={() => processPayment("credit")} className="flex-1 flex flex-col items-center gap-1 py-4 bg-amber-500 text-white hover:brightness-110 transition-all active:scale-95 rounded">
+                  <Wallet className="h-6 w-6" />
+                  <span className="text-[10px] font-bold uppercase">Crédit</span>
                 </button>
               </div>
               <button onClick={() => setPaymentDialog(false)} className="w-full py-2 bg-muted text-foreground text-[10px] font-bold uppercase">{t("dialog.cancel")}</button>
@@ -685,9 +767,7 @@ const Register = () => {
           className="flex flex-col items-center border-b border-register-border bg-slate-50/50 flex-shrink-0 relative overflow-hidden"
           style={{ paddingTop: Math.round(18 * leftPanelScale), paddingBottom: Math.round(18 * leftPanelScale) }}
         >
-          {/* Subtle background glow */}
           <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/5 blur-3xl rounded-full -translate-y-1/2 translate-x-1/2" />
-          
           <motion.div
             className="flex flex-col items-center leading-none"
             initial={{ scale: 0.8, opacity: 0 }}
@@ -700,7 +780,7 @@ const Register = () => {
                 animate={{ x: 0, opacity: 1 }}
                 transition={{ duration: 0.5, delay: 0.1 }}
                 className="font-black tracking-tighter"
-                style={{ 
+                style={{
                   fontSize: Math.round(48 * leftPanelScale),
                   background: 'var(--gradient-primary)',
                   WebkitBackgroundClip: 'text',
@@ -714,7 +794,7 @@ const Register = () => {
                 animate={{ x: 0, opacity: 1 }}
                 transition={{ duration: 0.5, delay: 0.25 }}
                 className="font-black tracking-tighter"
-                style={{ 
+                style={{
                   fontSize: Math.round(48 * leftPanelScale),
                   background: 'var(--gradient-primary)',
                   WebkitBackgroundClip: 'text',
@@ -727,7 +807,7 @@ const Register = () => {
             <div className="text-center px-1 overflow-hidden mt-1 px-4">
               <p
                 className="font-bold tracking-[0.45em] uppercase"
-                style={{ 
+                style={{
                   fontSize: Math.round(10.5 * leftPanelScale),
                   background: 'var(--gradient-primary)',
                   WebkitBackgroundClip: 'text',
@@ -832,6 +912,9 @@ const Register = () => {
                 }`}
             >
               {t("label.client")}{n}
+              {assignedClients[n] && (
+                <span className="ml-0.5 text-[8px] opacity-80">({assignedClients[n]!.name.split(" ")[0]})</span>
+              )}
               {(clientCarts[n]?.length || 0) > 0 && activeClient !== n && (
                 <span className="absolute top-0.5 right-1 w-1.5 h-1.5 rounded-full bg-accent" />
               )}
@@ -854,35 +937,63 @@ const Register = () => {
             </thead>
             <tbody>
               <AnimatePresence>
-                {cart.map((item, i) => (
-                  <motion.tr key={item.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10, height: 0 }} transition={{ duration: 0.2, delay: i * 0.03 }}
-                    onClick={() => setSelectedItemId(item.id === selectedItemId ? null : item.id)}
-                    className={`cursor-pointer transition-colors border-b border-register-border ${item.id === selectedItemId ? "bg-primary/10 border-l-2 border-l-primary" : i % 2 === 0 ? "bg-card hover:bg-muted/40" : "bg-muted/20 hover:bg-muted/40"
+                {cart.map((item, i) => {
+                  const lineTotal = item.quantity * item.price;
+                  const isReturn = item.isReturn;
+
+                  return (
+                    <motion.tr
+                      key={item.id}
+                      data-item-id={item.id}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: 10, height: 0 }}
+                      transition={{ duration: 0.2, delay: i * 0.03 }}
+                      onClick={() => setSelectedItemId(item.id === selectedItemId ? null : item.id)}
+                      className={`cursor-pointer transition-colors border-b border-register-border ${
+                        isReturn
+                          ? "bg-red-50 border-l-2 border-l-red-400"
+                          : item.id === selectedItemId
+                            ? "bg-primary/10 border-l-2 border-l-primary"
+                            : i % 2 === 0
+                              ? "bg-card hover:bg-muted/40"
+                              : "bg-muted/20 hover:bg-muted/40"
                       }`}
-                  >
-                    <td className="px-3 py-2.5 text-[12px] font-medium text-foreground">
-                      <div className="flex items-center gap-2">
-                        <motion.div animate={{ scale: item.id === selectedItemId ? 1.15 : 1 }} className={`w-1.5 h-1.5 rounded-full shrink-0 ${item.id === selectedItemId ? "bg-primary" : "bg-muted-foreground/30"}`} />
-                        {item.name}
-                        {item.price === 0 && <span className="text-[8px] px-1 py-0.5 bg-success text-success-foreground font-bold uppercase">{t("action.gift")}</span>}
-                      </div>
-                    </td>
-                    <td className="px-3 py-2.5 text-center text-[12px]">
-                      <div className="flex flex-col items-center gap-0.5">
-                        <button onClick={(e) => { e.stopPropagation(); setSelectedItemId(item.id); setTimeout(() => setQuantityDialog(true), 0); }} className="inline-block min-w-[28px] px-1 py-0.5 bg-muted text-foreground font-bold font-digital hover:bg-primary hover:text-primary-foreground transition-all cursor-pointer rounded-sm active:scale-95 shadow-sm">
-                          {item.quantity}
-                        </button>
-                        {item.packSize && item.packSize > 1 && (
-                          <span className="text-[9px] font-black text-primary/70 bg-primary/5 px-1 rounded border border-primary/10">
-                            x{item.packSize}
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-3 py-2.5 text-right text-muted-foreground text-[14px] font-digital">{item.price.toFixed(2)} DA</td>
-                    <td className="px-3 py-2.5 text-right font-bold text-foreground text-[14px] font-digital">{(item.quantity * item.price).toFixed(2)} DA</td>
-                  </motion.tr>
-                ))}
+                      style={isReturn ? {
+                        backgroundImage: "repeating-linear-gradient(135deg, transparent, transparent 10px, rgba(239,68,68,0.04) 10px, rgba(239,68,68,0.04) 20px)"
+                      } : undefined}
+                    >
+                      <td className="px-3 py-2.5 text-[12px] font-medium text-foreground">
+                        <div className="flex items-center gap-2">
+                          <motion.div animate={{ scale: item.id === selectedItemId ? 1.15 : 1 }} className={`w-1.5 h-1.5 rounded-full shrink-0 ${isReturn ? "bg-red-500" : item.id === selectedItemId ? "bg-primary" : "bg-muted-foreground/30"}`} />
+                          <span className={isReturn ? "line-through text-red-600" : ""}>{item.name}</span>
+                          {isReturn && (
+                            <span className="text-[8px] px-1.5 py-0.5 bg-red-500 text-white font-black uppercase rounded-sm">
+                              RETOUR
+                            </span>
+                          )}
+                          {item.price === 0 && !isReturn && <span className="text-[8px] px-1 py-0.5 bg-success text-success-foreground font-bold uppercase">{t("action.gift")}</span>}
+                        </div>
+                      </td>
+                      <td className="px-3 py-2.5 text-center text-[12px]">
+                        <div className="flex flex-col items-center gap-0.5">
+                          <button onClick={(e) => { e.stopPropagation(); setSelectedItemId(item.id); setTimeout(() => setQuantityDialog(true), 0); }} className={`inline-block min-w-[28px] px-1 py-0.5 font-bold font-digital hover:bg-primary hover:text-primary-foreground transition-all cursor-pointer rounded-sm active:scale-95 shadow-sm ${isReturn ? "bg-red-100 text-red-700" : "bg-muted text-foreground"}`}>
+                            {isReturn ? `-${item.quantity}` : item.quantity}
+                          </button>
+                          {item.packSize && item.packSize > 1 && (
+                            <span className="text-[9px] font-black text-primary/70 bg-primary/5 px-1 rounded border border-primary/10">
+                              x{item.packSize}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className={`px-3 py-2.5 text-right text-[14px] font-digital ${isReturn ? "text-red-500" : "text-muted-foreground"}`}>{item.price.toFixed(2)} DA</td>
+                      <td className={`px-3 py-2.5 text-right font-bold text-[14px] font-digital ${isReturn ? "text-red-600" : "text-foreground"}`}>
+                        {isReturn ? `-${lineTotal.toFixed(2)}` : lineTotal.toFixed(2)} DA
+                      </td>
+                    </motion.tr>
+                  );
+                })}
               </AnimatePresence>
             </tbody>
           </table>
@@ -896,6 +1007,11 @@ const Register = () => {
         {/* Bottom bar */}
         <div className="px-3 py-1.5 border-t border-register-border bg-muted flex items-center justify-between text-[11px] text-muted-foreground">
           <span>{cart.length} {t("label.articles")}</span>
+          {currentAssignedClient && (
+            <span className="flex items-center gap-1 text-primary font-bold">
+              <User className="h-3 w-3" /> {currentAssignedClient.name}
+            </span>
+          )}
           <span>{t("label.totalQty")}: {cart.reduce((s, i) => s + i.quantity, 0)}</span>
           <span>{t("label.cashBalance")}: {cashBalance.toFixed(2)} DA</span>
         </div>
@@ -913,21 +1029,19 @@ const Register = () => {
         />
       </div>
 
-      {/* RIGHT PANEL — resizable hotkey buttons */}
+      {/* RIGHT PANEL */}
       <div
         className="flex flex-col border-l border-register-border bg-card overflow-hidden flex-shrink-0"
         style={{ width: panelWidth }}
       >
         <div className="flex flex-col bg-white border-b border-register-border flex-shrink-0 items-center justify-center relative overflow-hidden" style={{ padding: Math.round(12 * headerScale) }}>
-          {/* Subtle background glow */}
           <div className="absolute top-0 left-0 w-24 h-24 bg-orange-500/5 blur-3xl rounded-full -translate-y-1/2 -translate-x-1/2" />
-
           <div className="flex flex-col items-center mb-2">
             <div
               className="rounded-full border-2 border-primary flex items-center justify-center text-primary mb-1 bg-white shadow-sm"
-              style={{ 
-                width: Math.round(42 * headerScale), 
-                height: Math.round(42 * headerScale) 
+              style={{
+                width: Math.round(42 * headerScale),
+                height: Math.round(42 * headerScale)
               }}
             >
               <User style={{ width: Math.round(22 * headerScale), height: Math.round(22 * headerScale) }} />
@@ -961,18 +1075,14 @@ const Register = () => {
           </div>
         </div>
 
-        {/* Button grid — reflows instantly as panelWidth changes */}
         <ScrollArea className="flex-1 p-1.5 pr-2.5">
           {(() => {
-            // Build rows so the last row can be centered if it's partial
             const rows: typeof visibleButtons[] = [];
             for (let i = 0; i < visibleButtons.length; i += panelCols) {
               rows.push(visibleButtons.slice(i, i + panelCols));
             }
             return rows.map((row, rowIdx) => {
               const isFull = row.length === panelCols;
-              // Calculate explicit width for each button to ensure orphans don't expand
-              // 12px for p-1.5 (6px each side), 4px for gap-1
               const totalGapWidth = (panelCols - 1) * 4;
               const btnWidth = Math.floor((panelWidth - 12 - totalGapWidth) / panelCols);
 
@@ -998,12 +1108,10 @@ const Register = () => {
                           transition-all duration-75 active:scale-95 overflow-hidden flex-shrink-0 relative group shadow-sm hover:shadow-md"
                         style={{ height: btnHeight, width: btnWidth }}
                       >
-                        {/* Notch indicator */}
                         <div className="absolute top-0 right-0 w-5 h-5 overflow-hidden">
                           <div className={`absolute top-0 right-0 w-7 h-7 ${theme.bg} rotate-45 transform origin-bottom-left translate-x-[40%] -translate-y-[40%] shadow-sm`} />
                         </div>
 
-                        {/* Content: Centered Icon + Label */}
                         <div className="flex flex-col items-center justify-center flex-1 w-full px-1 py-1">
                           <div
                             className={`rounded-full border flex items-center justify-center mb-1.5 transition-transform group-hover:scale-110 ${theme.text} ${theme.border}`}
@@ -1029,7 +1137,6 @@ const Register = () => {
                           </span>
                         </div>
 
-                        {/* Floating Hotkey label */}
                         <div className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded-sm bg-gray-50/80 backdrop-blur-sm border border-gray-100 flex items-center justify-center opacity-70 group-hover:opacity-100 transition-opacity">
                           <span className="font-black text-slate-500" style={{ fontSize: badgeSize * 0.9 }}>
                             {shortcut || "—"}
@@ -1045,7 +1152,44 @@ const Register = () => {
         </ScrollArea>
       </div>
     </div>
+
+    {/* All overlay dialogs */}
     <SalesHistoryDialog open={salesHistoryOpen} onClose={() => setSalesHistoryOpen(false)} />
+    <TreasuryHub
+      open={treasuryOpen}
+      onClose={() => setTreasuryOpen(false)}
+      defaultTab={treasuryTab}
+      userId={activeUser.id}
+      userName={activeUser.name}
+    />
+    <CartsManager
+      open={cartsManagerOpen}
+      onClose={() => setCartsManagerOpen(false)}
+      clientCarts={clientCarts}
+      setClientCarts={setClientCarts}
+      activeClient={activeClient}
+    />
+    <ClientAssociation
+      open={clientAssocOpen}
+      onClose={() => setClientAssocOpen(false)}
+      currentClient={currentAssignedClient || null}
+      onAssign={(client) => setAssignedClients((prev) => ({ ...prev, [activeClient]: client }))}
+    />
+    <LabelPreview
+      open={labelPreviewOpen}
+      onClose={() => setLabelPreviewOpen(false)}
+      product={selectedItem ? { name: selectedItem.name, price: selectedItem.price, barcode: selectedItem.barcode } : null}
+    />
+    <PackCyclePopover
+      open={packCycleOpen}
+      onClose={() => setPackCycleOpen(false)}
+      variants={selectedVariants}
+      currentIndex={selectedItem?.packVariantIndex ?? -1}
+      unitName={selectedBaseName}
+      unitPrice={selectedItem?.originalPrice || selectedItem?.price || 0}
+      onSelect={handlePackSelect}
+      anchorRect={packCycleAnchor}
+    />
     </>
   );
 };
