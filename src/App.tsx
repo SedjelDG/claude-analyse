@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -6,20 +7,27 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { UserStoreProvider } from "@/hooks/useUserStore";
 import Index from "./pages/Index.tsx";
 import NotFound from "./pages/NotFound.tsx";
-import Settings from "./pages/Settings.tsx";
-import Register from "./pages/Register.tsx";
-import ManagementLayout from "./components/management/ManagementLayout.tsx";
-import Dashboard from "./pages/management/Dashboard.tsx";
-import ProductManagement from "./pages/management/ProductManagement.tsx";
-import ScaleIntegration from "./pages/management/ScaleIntegration.tsx";
-import Users from "./pages/management/Users.tsx";
-import CashHistory from "./pages/management/CashHistory.tsx";
-import Reports from "./pages/management/Reports.tsx";
-import Purchases from "./pages/management/Purchases.tsx";
-import StoreInfo from "./pages/management/StoreInfo.tsx";
-import Contacts from "./pages/management/Contacts.tsx";
+
+const Settings = lazy(() => import("./pages/Settings.tsx"));
+const Register = lazy(() => import("./pages/Register.tsx"));
+const ManagementLayout = lazy(() => import("./components/management/ManagementLayout.tsx"));
+const Dashboard = lazy(() => import("./pages/management/Dashboard.tsx"));
+const ProductManagement = lazy(() => import("./pages/management/ProductManagement.tsx"));
+const ScaleIntegration = lazy(() => import("./pages/management/ScaleIntegration.tsx"));
+const Users = lazy(() => import("./pages/management/Users.tsx"));
+const CashHistory = lazy(() => import("./pages/management/CashHistory.tsx"));
+const Reports = lazy(() => import("./pages/management/Reports.tsx"));
+const Purchases = lazy(() => import("./pages/management/Purchases.tsx"));
+const StoreInfo = lazy(() => import("./pages/management/StoreInfo.tsx"));
+const Contacts = lazy(() => import("./pages/management/Contacts.tsx"));
 
 const queryClient = new QueryClient();
+
+const RouteFallback = () => (
+  <div className="flex min-h-screen items-center justify-center bg-background text-sm font-medium text-muted-foreground">
+    Chargement...
+  </div>
+);
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -28,23 +36,25 @@ const App = () => (
         <Toaster />
         <Sonner />
         <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/register" element={<Register />} />
-            <Route path="/settings" element={<Settings />} />
-            <Route path="/management" element={<ManagementLayout />}>
-              <Route index element={<Dashboard />} />
-              <Route path="products" element={<ProductManagement />} />
-              <Route path="scale" element={<ScaleIntegration />} />
-              <Route path="users" element={<Users />} />
-              <Route path="cash" element={<CashHistory />} />
-              <Route path="reports" element={<Reports />} />
-              <Route path="purchases" element={<Purchases />} />
-              <Route path="store" element={<StoreInfo />} />
-              <Route path="contacts" element={<Contacts />} />
-            </Route>
-            <Route path="*" element={<NotFound />} />
-          </Routes>
+          <Suspense fallback={<RouteFallback />}>
+            <Routes>
+              <Route path="/" element={<Index />} />
+              <Route path="/register" element={<Register />} />
+              <Route path="/settings" element={<Settings />} />
+              <Route path="/management" element={<ManagementLayout />}>
+                <Route index element={<Dashboard />} />
+                <Route path="products" element={<ProductManagement />} />
+                <Route path="scale" element={<ScaleIntegration />} />
+                <Route path="users" element={<Users />} />
+                <Route path="cash" element={<CashHistory />} />
+                <Route path="reports" element={<Reports />} />
+                <Route path="purchases" element={<Purchases />} />
+                <Route path="store" element={<StoreInfo />} />
+                <Route path="contacts" element={<Contacts />} />
+              </Route>
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </Suspense>
         </BrowserRouter>
       </TooltipProvider>
     </UserStoreProvider>

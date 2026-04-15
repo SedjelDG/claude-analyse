@@ -28,6 +28,7 @@ const TreasuryHub = ({ open, onClose, defaultTab = "cash", userId, userName }: T
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
   const [mode, setMode] = useState<"add" | "remove">("add");
+  const [countedCash, setCountedCash] = useState<string>("");
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -62,8 +63,10 @@ const TreasuryHub = ({ open, onClose, defaultTab = "cash", userId, userName }: T
   const totalReturns = todayMovements.filter((m) => m.type === "return").reduce((s, m) => s + m.amount, 0);
   const totalCashIn = todayMovements.filter((m) => m.type === "add").reduce((s, m) => s + m.amount, 0);
   const totalCashOut = todayMovements.filter((m) => m.type === "remove").reduce((s, m) => s + m.amount, 0);
-  const expectedBalance = totalSales - totalReturns + totalCashIn - totalCashOut;
   const saleCount = todayMovements.filter((m) => m.type === "sale").length;
+
+  const countedVal = parseFloat(countedCash) || 0;
+  const gap = countedVal - balance;
 
   // Shift: per-user breakdown
   const userMap = new Map<string, { name: string; sales: number; cashIn: number; cashOut: number; returns: number; count: number }>();
@@ -264,19 +267,27 @@ const TreasuryHub = ({ open, onClose, defaultTab = "cash", userId, userName }: T
                   </div>
                 </div>
 
-                <div className="bg-muted/50 border border-border rounded-md p-4">
-                  <div className="flex justify-between text-sm mb-2">
-                    <span className="text-muted-foreground">Solde attendu</span>
-                    <span className="font-bold text-foreground">{expectedBalance.toFixed(2)} DA</span>
-                  </div>
-                  <div className="flex justify-between text-sm mb-2">
-                    <span className="text-muted-foreground">Solde actuel</span>
+                <div className="bg-muted/50 border border-border rounded-md p-4 space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-bold text-foreground">Solde système (Attendu)</span>
                     <span className="font-bold text-foreground">{balance.toFixed(2)} DA</span>
                   </div>
-                  <div className="flex justify-between text-sm border-t border-border pt-2">
-                    <span className="font-bold text-foreground">Écart</span>
-                    <span className={`font-black ${Math.abs(balance - expectedBalance) < 1 ? "text-emerald-600" : "text-red-500"}`}>
-                      {(balance - expectedBalance).toFixed(2)} DA
+                  
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-bold text-foreground">Total Compté (Physique)</span>
+                    <input
+                      type="number"
+                      value={countedCash}
+                      onChange={(e) => setCountedCash(e.target.value)}
+                      placeholder="0.00"
+                      className="w-[140px] px-3 py-1.5 text-right font-black text-lg border border-input rounded-md bg-background focus:ring-2 focus:ring-primary outline-none"
+                    />
+                  </div>
+
+                  <div className="flex justify-between text-sm border-t border-border pt-3">
+                    <span className="font-bold text-foreground">Écart de caisse</span>
+                    <span className={`font-black text-lg ${Math.abs(gap) < 0.01 ? "text-emerald-600" : gap > 0 ? "text-emerald-500" : "text-red-500"}`}>
+                      {gap > 0.01 ? "+" : ""}{gap.toFixed(2)} DA
                     </span>
                   </div>
                 </div>

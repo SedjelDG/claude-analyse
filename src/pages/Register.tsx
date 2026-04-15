@@ -1,762 +1,234 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import {
-  Plus, Minus, Search, Trash2, Trash, Lock, Percent, RotateCcw,
-  CreditCard, Pause, Hash, Wallet, DoorOpen, PiggyBank, User,
-  Gift, X, Power, Clock, CalendarDays, Barcode,
-  Banknote, CreditCard as CardIcon, Settings, LogOut, Globe,
-  PackageOpen, Shield, Play, Receipt, Tag, ShoppingCart
-} from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
 import { useTranslation } from "@/hooks/useTranslation";
-import { useUserStore, STANDARD_CASHIER } from "@/hooks/useUserStore";
-import { useSettings, DEFAULT_HOTKEYS } from "@/hooks/useSettings";
-import { useCashRegister } from "@/hooks/useCashRegister";
-import { useContacts, Contact } from "@/hooks/useContacts";
+import { useRegisterState } from "@/hooks/useRegisterState";
+import {
+  Lock, CreditCard, Clock, CalendarDays,
+  Banknote, Settings, LogOut, Shield, User,
+  Hash, Combine,
+} from "lucide-react";
+
 import RegisterSearchBar from "@/components/register/RegisterSearchBar";
 import SalesHistoryDialog from "@/components/register/SalesHistoryDialog";
+import { ActionButtonGrid } from "@/components/register/ActionButtonGrid";
+import { CartItemRow } from "@/components/register/CartItemRow";
+
+// Lovable Components
 import TreasuryHub from "@/components/register/TreasuryHub";
 import CartsManager from "@/components/register/CartsManager";
 import ClientAssociation from "@/components/register/ClientAssociation";
 import LabelPreview from "@/components/register/LabelPreview";
 import PackCyclePopover from "@/components/register/PackCyclePopover";
+
+// Dialog Components
+import { LockOverlay } from "@/components/register/dialogs/LockOverlay";
+import { QuantityDialog } from "@/components/register/dialogs/QuantityDialog";
+import { DiscountDialog } from "@/components/register/dialogs/DiscountDialog";
+import { PrixLibreDialog } from "@/components/register/dialogs/PrixLibreDialog";
+import { PaymentDialog } from "@/components/register/dialogs/PaymentDialog";
+import { CashMovementDialog } from "@/components/register/dialogs/CashMovementDialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { toast as sonnerToast } from "sonner";
 
-interface CartItem {
-  id: string;
-  name: string;
-  quantity: number;
-  price: number;
-  barcode?: string;
-  packVariantIndex?: number;
-  packSize: number;
-  originalName?: string;
-  originalPrice?: number;
-  isReturn?: boolean;
-}
-
-const initialCart: CartItem[] = [
-  { id: "1", name: "Lait 1L", quantity: 2, price: 100, barcode: "6191234000001", packSize: 1 },
-  { id: "2", name: "Pain", quantity: 3, price: 50, barcode: "6191234000002", packSize: 1 },
-  { id: "3", name: "Eau 1.5L", quantity: 6, price: 25, barcode: "6191234000003", packSize: 1 },
-  { id: "4", name: "Sucre 1kg", quantity: 1, price: 100, barcode: "6191234000004", packSize: 1 },
-  { id: "5", name: "Fromage (0.5kg)", quantity: 1, price: 400, barcode: "6191234000005", packSize: 1 },
-];
-
-const shortcuts = [
-  { name: "LABAN MAGASIN", color: "bg-register-btn-green", productId: "p14" },
-  { name: "Tamalou kord", color: "bg-register-btn-blue", productId: "p15" },
-  { name: "Café 250g", color: "bg-register-btn-gold", productId: "p6" },
-  { name: "Farine 1kg", color: "bg-register-btn-salmon", productId: "p7" },
-  { name: "Sel 1kg", color: "bg-register-btn-olive", productId: "p8" },
-  { name: "Beurre 200g", color: "bg-register-btn-yellow", productId: "p9" },
-  { name: "Huile 1L", color: "bg-register-btn-teal", productId: "p10" },
-  { name: "Chocolat", color: "bg-register-btn-pink", productId: "p11" },
-  { name: "Jus 1L", color: "bg-register-btn-purple", productId: "p12" },
-  { name: "Yaourt", color: "bg-register-btn-lightblue", productId: "p13" },
-];
-
-const shortcutProducts: Record<string, { name: string; price: number }> = {
-  p14: { name: "LABAN MAGASIN", price: 60 },
-  p15: { name: "Tamalou kord", price: 200 },
-  p6: { name: "Café 250g", price: 350 },
-  p7: { name: "Farine 1kg", price: 80 },
-  p8: { name: "Sel 1kg", price: 30 },
-  p9: { name: "Beurre 200g", price: 250 },
-  p10: { name: "Huile 1L", price: 300 },
-  p11: { name: "Chocolat", price: 150 },
-  p12: { name: "Jus 1L", price: 120 },
-  p13: { name: "Yaourt", price: 45 },
-};
-
-// Pack variants lookup (mock — in production from DB)
-const PACK_VARIANTS: Record<string, { size: number; name: string; price: number }[]> = {
-  "Lait 1L": [{ size: 6, name: "Pack 6", price: 550 }, { size: 12, name: "Carton 12", price: 1050 }],
-  "Eau 1.5L": [{ size: 6, name: "Pack 6", price: 140 }],
-  "Yaourt": [{ size: 4, name: "Pack 4", price: 160 }, { size: 12, name: "Carton 12", price: 450 }],
-};
-
-const ALL_ACTION_BUTTONS = [
-  { key: "action.add", icon: Plus },
-  { key: "action.deduct", icon: Minus },
-  { key: "action.search", icon: Search },
-  { key: "action.discount", icon: Percent },
-  { key: "action.removeAll", icon: Trash },
-  { key: "action.lock", icon: Lock },
-  { key: "action.return", icon: RotateCcw },
-  { key: "action.quantity", icon: Hash },
-  { key: "action.payment", icon: CreditCard },
-  { key: "action.hold", icon: Pause },
-  { key: "action.deposit", icon: Wallet },
-  { key: "action.drawer", icon: DoorOpen },
-  { key: "action.gift", icon: Gift },
-  { key: "action.close", icon: X },
-  { key: "action.stop", icon: Power },
-  { key: "action.lang", icon: Globe },
-  { key: "action.treasury", icon: PiggyBank },
-  { key: "action.client", icon: User },
-  { key: "action.packCycle", icon: PackageOpen },
-  { key: "action.salesHistory", icon: Receipt },
-  { key: "action.carts", icon: ShoppingCart },
-  { key: "action.label", icon: Tag },
-];
+const REGISTER_ID = "register-main";
 
 const Register = () => {
-  const navigate = useNavigate();
-  const { toast } = useToast();
   const { t } = useTranslation();
-  const { currentUser, logout, isOpenMode } = useUserStore();
-  const activeUser = currentUser || STANDARD_CASHIER;
-  const { settings, getHotkeys, updateSettings } = useSettings(activeUser.id);
-  const { balance: cashBalance, addMovement } = useCashRegister();
-  const { addCredit } = useContacts();
+  const navigate = useNavigate();
 
-  // Multi-client carts
-  const [clientCarts, setClientCarts] = useState<Record<number, CartItem[]>>({
-    1: [...initialCart], 2: [], 3: [], 4: [], 5: [], 6: [],
-  });
-  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
-  const [activeClient, setActiveClient] = useState(1);
-  const [now, setNow] = useState(new Date());
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [isLocked, setIsLocked] = useState(false);
-  const [lockPassword, setLockPassword] = useState("");
-  const [discount, setDiscount] = useState(0);
+  // ── Register Brain Hook ──
+  const {
+    state: {
+      activeUser, clientStates, activeClient, cart, selectedItemId, discount,
+      isLocked, lockPassword, allProducts, now, multiplier, multiplierDisplay,
+      visibleButtons,
+      dialogs: {
+        searchOpen, searchInitialQuery, quantityDialog, quantityValue,
+        discountDialog, discountValue, discountType, paymentDialog,
+        cashDialog, cashAmount, cashNote, salesHistoryOpen,
+        prixLibreDialog, prixLibreValue, mergeDialogOpen,
+        treasuryOpen, cartsManagerOpen, clientAssocOpen,
+        labelPreviewOpen, packCycleOpen, packCycleAnchor,
+        shakingItemId,
+      },
+      assignedClients,
+    },
+    totals: { subtotal, discountAmount, totalTTC },
+    layout: {
+      panelCols, btnScale, headerScale, leftPanelScale,
+      leftPanelWidth, panelWidth, handleLeftDividerMouseDown, handleDividerMouseDown
+    },
+    actions: {
+      onAddSelected, onDeductSelected, onRemoveSelected, onVoidTransaction,
+      onGift, onPackCycle, onPackSelect, onOpenQuantityDialog, onOpenDiscountDialog,
+      onOpenPaymentDialog, onOpenPrixLibre, onOpenSalesHistory, onOpenMergeCarts,
+      onOpenCashDialog, onLock, onCloseShift,
+      setActiveClient, setSearchOpen, setSearchInitialQuery, setQuantityDialog,
+      setQuantityValue, setDiscountDialog, setDiscountValue, setDiscountType,
+      setPaymentDialog, setCashDialog, setCashAmount, setCashNote,
+      setSalesHistoryOpen, setPrixLibreDialog, setPrixLibreValue, setMergeDialogOpen,
+      setLockPassword, handleUnlock, confirmQuantity, confirmDiscount,
+      confirmPrixLibre, confirmCash, performMerge, processPayment,
+      performMoveItems, performSplitItem, performMergeCarts,
+      addProductToCart, refundSale, refundItems,
+      setTreasuryOpen, setCartsManagerOpen, setClientAssocOpen,
+      setLabelPreviewOpen, setPackCycleOpen, setAssignedClients, setPackCycleAnchor,
+      isOpenMode, logout, settings, sales, cashBalance,
+      onReturn, onPrintDraft, onPrintLabel,
+      onTreasuryInfo, onClientInfo, onOpenCartsManager,
+      userHotkeys, fullActions, setSelectedItemId
+    },
+    refs: { cartScrollRef, selectedRowRef }
+  } = useRegisterState() as any; // Cast for now until hook types are perfected
 
-  // Dialogs
-  const [quantityDialog, setQuantityDialog] = useState(false);
-  const [quantityValue, setQuantityValue] = useState("");
-  const [discountDialog, setDiscountDialog] = useState(false);
-  const [discountValue, setDiscountValue] = useState("");
-  const [paymentDialog, setPaymentDialog] = useState(false);
-  const [cashDialog, setCashDialog] = useState<"add" | "remove" | null>(null);
-  const [cashAmount, setCashAmount] = useState("");
-  const [cashNote, setCashNote] = useState("");
-  const [salesHistoryOpen, setSalesHistoryOpen] = useState(false);
+  // Dynamic shortcuts
+  const shortcutsData = (allProducts || []).filter(p => p.isActive).slice(0, 10).map(p => ({
+    name: p.shortLabel || p.name,
+    color: p.buttonColor || "bg-primary/10",
+    productId: p.id,
+  }));
 
-  // New feature dialogs
-  const [treasuryOpen, setTreasuryOpen] = useState(false);
-  const [treasuryTab, setTreasuryTab] = useState<"cash" | "zreport" | "shift">("cash");
-  const [cartsManagerOpen, setCartsManagerOpen] = useState(false);
-  const [clientAssocOpen, setClientAssocOpen] = useState(false);
-  const [labelPreviewOpen, setLabelPreviewOpen] = useState(false);
-  const [packCycleOpen, setPackCycleOpen] = useState(false);
-  const [packCycleAnchor, setPackCycleAnchor] = useState<DOMRect | null>(null);
-
-  // Per-cart assigned clients
-  const [assignedClients, setAssignedClients] = useState<Record<number, Contact | null>>({
-    1: null, 2: null, 3: null, 4: null, 5: null, 6: null,
-  });
-
-  const cart = clientCarts[activeClient] || [];
-  const updateCart = useCallback((updater: (prev: CartItem[]) => CartItem[]) => {
-    setClientCarts((prev) => ({
-      ...prev,
-      [activeClient]: updater(prev[activeClient] || []),
-    }));
-  }, [activeClient]);
-
-  useEffect(() => {
-    const interval = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // Total calculation with return support
-  const total = cart.reduce((s, i) => {
-    const lineTotal = i.quantity * i.price;
-    return s + (i.isReturn ? -lineTotal : lineTotal);
-  }, 0);
-  const discountAmount = total * (discount / 100);
-  const totalTTC = total - discountAmount;
   const dateStr = now.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" });
   const timeStr = now.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
 
-  const addProductToCart = useCallback((product: { id?: string; name: string; price: number; barcode?: string; quantity?: number }) => {
-    updateCart((prev) => {
-      const existing = prev.find((item) => item.id === product.id && item.id !== "custom_misc");
-      if (existing) {
-        return prev.map((item) =>
-          item.id === product.id ? { ...item, quantity: item.quantity + (product.quantity || 1) } : item
-        );
-      }
-      return [
-        ...prev,
-        {
-          id: product.id || String(Date.now()),
-          name: product.name,
-          price: product.price,
-          quantity: product.quantity || 1,
-          originalPrice: product.price,
-          originalName: product.name,
-          packVariantIndex: -1,
-          packSize: 1,
-          barcode: product.barcode,
-        },
-      ];
-    });
-    toast({ title: product.name, description: t("toast.itemAdded") });
-  }, [updateCart, t]);
-
-  const removeProductFromCart = useCallback((productId: string) => {
-    updateCart((prev) => {
-      const existing = prev.find((item) => item.id === productId);
-      if (existing && existing.quantity > 1) {
-        return prev.map((item) => (item.id === productId ? { ...item, quantity: item.quantity - 1 } : item));
-      }
-      return prev.filter((item) => item.id !== productId);
-    });
-  }, [updateCart]);
-
-  // Selected item data for features
-  const selectedItem = cart.find((i) => i.id === selectedItemId);
-  const selectedBaseName = selectedItem?.originalName || selectedItem?.name || "";
-  const selectedVariants = PACK_VARIANTS[selectedBaseName] || [];
-
-  const actions: Record<string, () => void> = {
-    "action.add": () => {
-      if (!selectedItemId) { toast({ title: t("toast.noItemSelected"), description: t("toast.selectItem") }); return; }
-      const item = cart.find((i) => i.id === selectedItemId);
-      if (item) {
-        addProductToCart(item);
-        toast({ title: t("toast.updated"), description: item.name });
-      }
-    },
-    "action.deduct": () => {
-      if (!selectedItemId) { toast({ title: t("toast.noItemSelected"), description: t("toast.selectItem") }); return; }
-      removeProductFromCart(selectedItemId);
-    },
-    "action.search": () => setSearchOpen(true),
-    "action.remove": () => {
-      if (!selectedItemId) { toast({ title: t("toast.noItemSelected"), description: t("toast.selectItem") }); return; }
-      updateCart((prev) => prev.filter((i) => i.id !== selectedItemId));
-      setSelectedItemId(null);
-    },
-    "action.removeAll": () => {
-      updateCart(() => []);
-      setSelectedItemId(null);
-      setDiscount(0);
-      toast({ title: t("action.removeAll") });
-    },
-    "action.lock": () => { setIsLocked(true); toast({ title: t("toast.locked") }); },
-    "action.discount": () => setDiscountDialog(true),
-    // ── Refund / Return Logic ──
-    "action.return": () => {
-      if (!selectedItemId) { toast({ title: t("toast.noItemSelected"), description: t("toast.selectItem") }); return; }
-      const item = cart.find((i) => i.id === selectedItemId);
-      if (!item) return;
-      // Toggle return status
-      updateCart((prev) =>
-        prev.map((i) =>
-          i.id === selectedItemId ? { ...i, isReturn: !i.isReturn } : i
-        )
-      );
-      const willBeReturn = !item.isReturn;
-      toast({
-        title: willBeReturn ? "Retour marqué" : "Retour annulé",
-        description: item.name,
-      });
-    },
-    "action.payment": () => setPaymentDialog(true),
-    "action.hold": () => { toast({ title: t("toast.transactionHeld"), description: `Client N°${activeClient}` }); },
-    "action.quantity": () => {
-      if (!selectedItemId) { toast({ title: t("toast.noItemSelected"), description: t("toast.selectItem") }); return; }
-      setQuantityDialog(true);
-    },
-    "action.deposit": () => { setTreasuryTab("cash"); setTreasuryOpen(true); },
-    "action.drawer": () => { setTreasuryTab("cash"); setTreasuryOpen(true); },
-    "action.treasury": () => { setTreasuryTab("zreport"); setTreasuryOpen(true); },
-    "action.client": () => setClientAssocOpen(true),
-    "action.gift": () => {
-      if (!selectedItemId) { toast({ title: t("toast.noItemSelected"), description: t("toast.selectItem") }); return; }
-      const item = cart.find((i) => i.id === selectedItemId);
-      if (item) {
-        updateCart((prev) => prev.map((i) => i.id === selectedItemId ? { ...i, price: 0 } : i));
-        toast({ title: t("toast.giftApplied"), description: item.name });
-      }
-    },
-    "action.close": () => {
-      updateCart(() => []);
-      setSelectedItemId(null);
-      setDiscount(0);
-      toast({ title: t("action.close") });
-    },
-    "action.stop": () => {
-      if (!isOpenMode()) logout();
-      navigate("/");
-    },
-    "action.lang": () => {
-      const newLang = settings.language === "fr" ? "en" : "fr";
-      updateSettings({ language: newLang });
-      toast({ title: newLang === "fr" ? "Français" : "English" });
-    },
-    // ── Dynamic Pack Cycling ──
-    "action.packCycle": () => {
-      if (!selectedItemId) { toast({ title: t("toast.noItemSelected"), description: t("toast.selectItem") }); return; }
-      const item = cart.find((i) => i.id === selectedItemId);
-      if (!item) return;
-      const baseName = item.originalName || item.name;
-      const variants = PACK_VARIANTS[baseName];
-      if (!variants || variants.length === 0) {
-        sonnerToast.error("Aucune variante", { description: baseName });
-        return;
-      }
-      // Get anchor rect for positioning
-      const row = document.querySelector(`[data-item-id="${selectedItemId}"]`);
-      if (row) setPackCycleAnchor(row.getBoundingClientRect());
-      setPackCycleOpen(true);
-    },
-    "action.salesHistory": () => setSalesHistoryOpen(true),
-    "action.carts": () => setCartsManagerOpen(true),
-    "action.label": () => {
-      if (!selectedItemId) { toast({ title: t("toast.noItemSelected"), description: t("toast.selectItem") }); return; }
-      setLabelPreviewOpen(true);
-    },
+  const handleShortcutClick = (id: string) => {
+    const p = allProducts.find(x => x.id === id);
+    if (p) addProductToCart(p as any);
   };
 
-  const handlePackSelect = (variantIndex: number) => {
-    if (!selectedItem) return;
-    const baseName = selectedItem.originalName || selectedItem.name;
-    const currentTotalUnits = selectedItem.quantity * (selectedItem.packSize || 1);
-
-    if (variantIndex === -1) {
-      // Back to unit
-      updateCart((prev) =>
-        prev.map((i) =>
-          i.id === selectedItemId
-            ? { ...i, name: baseName, quantity: currentTotalUnits, price: selectedItem.originalPrice || selectedItem.price, packVariantIndex: -1, packSize: 1, originalName: baseName }
-            : i
-        )
-      );
-    } else {
-      const v = selectedVariants[variantIndex];
-      const origPrice = selectedItem.originalPrice || selectedItem.price;
-      const newQty = Math.max(1, Math.floor(currentTotalUnits / v.size));
-      updateCart((prev) =>
-        prev.map((i) =>
-          i.id === selectedItemId
-            ? { ...i, name: `${baseName} (${v.name})`, quantity: newQty, price: v.price, packVariantIndex: variantIndex, packSize: v.size, originalName: baseName, originalPrice: origPrice }
-            : i
-        )
-      );
-    }
+  // Map action callbacks to useable handlers (internal registry)
+  const actionHandlers: Record<string, () => void> = {
+    "action.add": onAddSelected,
+    "action.deduct": onDeductSelected,
+    "action.remove": onRemoveSelected,
+    "action.void": onVoidTransaction,
+    "action.gift": onGift,
+    "action.return": onReturn,
+    "action.pack": onPackCycle,
+    "action.qty": onOpenQuantityDialog,
+    "action.discount": onOpenDiscountDialog,
+    "action.pay": onOpenPaymentDialog,
+    "action.misc": onOpenPrixLibre,
+    "action.history": onOpenSalesHistory,
+    "action.cashAdd": () => onOpenCashDialog("add"),
+    "action.cashRemove": () => onOpenCashDialog("remove"),
+    "action.lock": onLock,
+    "action.close": onCloseShift,
+    "action.printDraft": onPrintDraft,
+    "action.printLabel": onPrintLabel,
+    "action.deposit": onTreasuryInfo, // Treasury Hub acts as the hub
+    "action.drawer": onTreasuryInfo,
+    "action.client": onClientInfo,
+    "action.paniers": onOpenCartsManager, // Carts Manager hub
   };
-
-  const userHotkeys = getHotkeys();
-  const hiddenActions = settings.hiddenActions || [];
-  const visibleButtons = ALL_ACTION_BUTTONS.filter((btn) => !hiddenActions.includes(btn.key));
-
-  // ── Barcode Interceptor ────────────────────────────────────────────────
-  const barcodeBuffer = useRef("");
-  const lastKeyTime = useRef(0);
-
-  useEffect(() => {
-    const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-
-      const now = Date.now();
-      const isFast = now - lastKeyTime.current < 50;
-
-      if (e.key === "Enter") {
-        if (barcodeBuffer.current.length >= 5 && isFast) {
-          const code = barcodeBuffer.current;
-          let handled = false;
-
-          const scaleSettings = settings.hardware?.barcodeScale;
-          if (scaleSettings?.enabled && code.length === 13 && code.startsWith(scaleSettings.prefix || "20")) {
-            const plu = code.substring(2, 6);
-            const weightPrm = code.substring(6, 11);
-            const weight = parseInt(weightPrm, 10) / 1000;
-            const foundNode = Object.values(shortcutProducts).find((p: any) => p.barcode === code || p.id === plu);
-            const found = foundNode || { name: `Article Pesé (PLU: ${plu})`, price: 450, barcode: code };
-            addProductToCart({ ...found, quantity: weight });
-            handled = true;
-          }
-
-          if (!handled) {
-            const foundNode = Object.values(shortcutProducts).find((p: any) => p.barcode === code || p.name.includes(code));
-            const found = foundNode || { name: `Article ${code}`, price: Math.floor(Math.random() * 500) + 50, barcode: code };
-            addProductToCart(found);
-          }
-
-          e.preventDefault();
-          e.stopPropagation();
-        }
-        barcodeBuffer.current = "";
-      } else if (e.key.length === 1 && /[0-9a-zA-Z]/.test(e.key)) {
-        if (isFast || barcodeBuffer.current === "") {
-          barcodeBuffer.current += e.key;
-        } else {
-          barcodeBuffer.current = e.key;
-        }
-      }
-      lastKeyTime.current = now;
-    };
-    window.addEventListener("keydown", handleGlobalKeyDown, true);
-    return () => window.removeEventListener("keydown", handleGlobalKeyDown, true);
-  }, [addProductToCart]);
-
-  // Keyboard shortcuts
-  useEffect(() => {
-    const shortcutMap: Record<string, string> = {};
-    ALL_ACTION_BUTTONS.forEach((btn) => {
-      const hk = userHotkeys[btn.key];
-      if (hk) shortcutMap[hk.toLowerCase()] = btn.key;
-    });
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (isLocked) return;
-      if (e.key.startsWith("F") && !e.ctrlKey) {
-        e.preventDefault();
-        const key = shortcutMap[e.key.toLowerCase()];
-        if (key && actions[key]) actions[key]();
-        return;
-      }
-      if (e.ctrlKey && !e.shiftKey && !e.altKey) {
-        const combo = `ctrl+${e.key.toLowerCase()}`;
-        const key = shortcutMap[combo];
-        if (key && actions[key]) { e.preventDefault(); actions[key](); return; }
-      }
-      const isActuallyScanning = barcodeBuffer.current.length > 0;
-
-      if (!searchOpen && !quantityDialog && !discountDialog && !paymentDialog && !cashDialog &&
-        !treasuryOpen && !cartsManagerOpen && !clientAssocOpen && !labelPreviewOpen && !packCycleOpen &&
-        e.key.length === 1 && /[a-zA-Z0-9]/.test(e.key) && !e.ctrlKey && !e.altKey && !isActuallyScanning) {
-        setSearchOpen(true);
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  });
-
-  const handleShortcutClick = (productId: string) => {
-    const product = shortcutProducts[productId];
-    if (product) addProductToCart(product);
-  };
-
-  const confirmQuantity = () => {
-    const qty = parseInt(quantityValue);
-    if (qty > 0 && selectedItemId) {
-      updateCart((prev) => prev.map((i) => i.id === selectedItemId ? { ...i, quantity: qty } : i));
-      toast({ title: t("toast.quantityUpdated") });
-    }
-    setQuantityDialog(false);
-    setQuantityValue("");
-  };
-
-  const confirmDiscount = () => {
-    const val = parseFloat(discountValue);
-    if (!isNaN(val) && val >= 0 && val <= 100) {
-      setDiscount(val);
-      toast({ title: t("toast.discountApplied"), description: `${val}%` });
-    }
-    setDiscountDialog(false);
-    setDiscountValue("");
-  };
-
-  const processPayment = (method: "cash" | "card" | "credit") => {
-    if (method === "credit") {
-      const client = assignedClients[activeClient];
-      if (!client) {
-        toast({ title: "Aucun client associé", description: "Associez un client pour payer à crédit" });
-        setClientAssocOpen(true);
-        return;
-      }
-      // Log credit against client
-      addCredit(client.id, totalTTC);
-      toast({ title: "Crédit enregistré", description: `${totalTTC.toFixed(2)} DA → ${client.name}` });
-    } else if (method === "cash") {
-      // Record sales and returns separately
-      const salesTotal = cart.filter((i) => !i.isReturn).reduce((s, i) => s + i.quantity * i.price, 0);
-      const returnsTotal = cart.filter((i) => i.isReturn).reduce((s, i) => s + i.quantity * i.price, 0);
-      if (salesTotal > 0) {
-        addMovement({ type: "sale", amount: salesTotal, note: `Vente Client N°${activeClient}`, userId: activeUser.id, userName: activeUser.name });
-      }
-      if (returnsTotal > 0) {
-        addMovement({ type: "return", amount: returnsTotal, note: `Retour Client N°${activeClient}`, userId: activeUser.id, userName: activeUser.name });
-      }
-    }
-    toast({ title: t("toast.paymentProcessed"), description: `${totalTTC.toFixed(2)} DA — ${method === "cash" ? t("dialog.payment.cash") : method === "card" ? t("dialog.payment.card") : "Crédit"}` });
-    updateCart(() => []);
-    setSelectedItemId(null);
-    setDiscount(0);
-    setPaymentDialog(false);
-  };
-
-  const confirmCash = () => {
-    const amount = parseFloat(cashAmount);
-    if (isNaN(amount) || amount <= 0) return;
-    addMovement({
-      type: cashDialog === "add" ? "add" : "remove",
-      amount,
-      note: cashNote || (cashDialog === "add" ? t("toast.cashAdded") : t("toast.cashRemoved")),
-      userId: activeUser.id,
-      userName: activeUser.name,
-    });
-    toast({ title: cashDialog === "add" ? t("toast.cashAdded") : t("toast.cashRemoved"), description: `${amount.toFixed(2)} DA` });
-    setCashDialog(null);
-    setCashAmount("");
-    setCashNote("");
-  };
-
-  const handleUnlock = () => {
-    if (lockPassword === "1234" || lockPassword === "") {
-      setIsLocked(false);
-      setLockPassword("");
-      toast({ title: t("toast.unlocked") });
-    }
-  };
-
-  const getActionTheme = (actionKey: string) => {
-    const themes: Record<string, { text: string; bg: string; border: string }> = {
-      "action.add": { text: "text-[#10b981]", bg: "bg-[#10b981]", border: "border-[#10b981]/40" },
-      "action.deduct": { text: "text-[#ef4444]", bg: "bg-[#ef4444]", border: "border-[#ef4444]/40" },
-      "action.search": { text: "text-[#ec4899]", bg: "bg-[#ec4899]", border: "border-[#ec4899]/40" },
-      "action.removeAll": { text: "text-[#991b1b]", bg: "bg-[#991b1b]", border: "border-[#991b1b]/40" },
-      "action.lock": { text: "text-[#4b5563]", bg: "bg-[#4b5563]", border: "border-[#4b5563]/40" },
-      "action.return": { text: "text-[#f43f5e]", bg: "bg-[#f43f5e]", border: "border-[#f43f5e]/40" },
-      "action.discount": { text: "text-[#f97316]", bg: "bg-[#f97316]", border: "border-[#f97316]/40" },
-      "action.quantity": { text: "text-[#0d9488]", bg: "bg-[#0d9488]", border: "border-[#0d9488]/40" },
-      "action.payment": { text: "text-[#eab308]", bg: "bg-[#eab308]", border: "border-[#eab308]/40" },
-      "action.hold": { text: "text-[#3b82f6]", bg: "bg-[#3b82f6]", border: "border-[#3b82f6]/40" },
-      "action.deposit": { text: "text-[#1e40af]", bg: "bg-[#1e40af]", border: "border-[#1e40af]/40" },
-      "action.drawer": { text: "text-[#7e22ce]", bg: "bg-[#7e22ce]", border: "border-[#7e22ce]/40" },
-      "action.treasury": { text: "text-[#1e293b]", bg: "bg-[#1e293b]", border: "border-[#1e293b]/40" },
-      "action.client": { text: "text-[#3730a3]", bg: "bg-[#3730a3]", border: "border-[#3730a3]/40" },
-      "action.gift": { text: "text-[#0ea5e9]", bg: "bg-[#0ea5e9]", border: "border-[#0ea5e9]/40" },
-      "action.close": { text: "text-[#b91c1c]", bg: "bg-[#b91c1c]", border: "border-[#b91c1c]/40" },
-      "action.stop": { text: "text-[#000000]", bg: "bg-[#000000]", border: "border-[#000000]/40" },
-      "action.packCycle": { text: "text-[#dc2626]", bg: "bg-[#dc2626]", border: "border-[#dc2626]/40" },
-      "action.salesHistory": { text: "text-[#6366f1]", bg: "bg-[#6366f1]", border: "border-[#6366f1]/40" },
-      "action.carts": { text: "text-[#059669]", bg: "bg-[#059669]", border: "border-[#059669]/40" },
-      "action.label": { text: "text-[#8b5cf6]", bg: "bg-[#8b5cf6]", border: "border-[#8b5cf6]/40" },
-    };
-    return themes[actionKey] || { text: "text-primary", bg: "bg-primary", border: "border-primary/40" };
-  };
-
-  const getBadgeColor = (index: number) => {
-    const col = index % 3;
-    return col === 0 ? "bg-accent text-accent-foreground" : col === 1 ? "bg-success text-success-foreground" : "bg-info text-info-foreground";
-  };
-
-  // ── Resizable left panel ────────────────────────────────────────────────
-  const LEFT_PANEL_MIN = 160;
-  const LEFT_PANEL_MAX = 400;
-  const LEFT_PANEL_DEFAULT = 240;
-  const LEFT_PANEL_STORAGE_KEY = "register_left_panel_width";
-
-  const [leftPanelWidth, setLeftPanelWidth] = useState<number>(() => {
-    try {
-      const stored = localStorage.getItem(LEFT_PANEL_STORAGE_KEY);
-      if (stored) {
-        const n = Number(stored);
-        if (n >= LEFT_PANEL_MIN && n <= LEFT_PANEL_MAX) return n;
-      }
-    } catch { /* ignore */ }
-    return LEFT_PANEL_DEFAULT;
-  });
-
-  // ── Resizable right panel ────────────────────────────────────────────────
-  const PANEL_MIN = 320;
-  const PANEL_MAX = 600;
-  const PANEL_DEFAULT = 340;
-  const PANEL_STORAGE_KEY = "register_hotkey_panel_width";
-
-  const [panelWidth, setPanelWidth] = useState<number>(() => {
-    try {
-      const stored = localStorage.getItem(PANEL_STORAGE_KEY);
-      if (stored) {
-        const n = Number(stored);
-        if (n >= PANEL_MIN && n <= PANEL_MAX) return n;
-      }
-    } catch { /* ignore */ }
-    return PANEL_DEFAULT;
-  });
-
-  const isDragging = useRef<"left" | "right" | null>(null);
-  const dragStartX = useRef(0);
-  const dragStartWidth = useRef(0);
-  const rafId = useRef<number>(0);
-
-  const handleLeftDividerMouseDown = useCallback((e: React.MouseEvent) => {
-    if (settings.lockRegisterPanels) return;
-    e.preventDefault();
-    isDragging.current = "left";
-    dragStartX.current = e.clientX;
-    dragStartWidth.current = leftPanelWidth;
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-  }, [leftPanelWidth, settings.lockRegisterPanels]);
-
-  const handleDividerMouseDown = useCallback((e: React.MouseEvent) => {
-    if (settings.lockRegisterPanels) return;
-    e.preventDefault();
-    isDragging.current = "right";
-    dragStartX.current = e.clientX;
-    dragStartWidth.current = panelWidth;
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-  }, [panelWidth, settings.lockRegisterPanels]);
-
-  useEffect(() => {
-    const onMove = (e: MouseEvent) => {
-      if (!isDragging.current) return;
-      cancelAnimationFrame(rafId.current);
-      rafId.current = requestAnimationFrame(() => {
-        if (isDragging.current === "right") {
-          const delta = dragStartX.current - e.clientX;
-          const next = Math.min(PANEL_MAX, Math.max(PANEL_MIN, dragStartWidth.current + delta));
-          setPanelWidth(next);
-        } else if (isDragging.current === "left") {
-          const delta = e.clientX - dragStartX.current;
-          const next = Math.min(LEFT_PANEL_MAX, Math.max(LEFT_PANEL_MIN, dragStartWidth.current + delta));
-          setLeftPanelWidth(next);
-        }
-      });
-    };
-    const onUp = () => {
-      if (!isDragging.current) return;
-      const type = isDragging.current;
-      isDragging.current = null;
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-      if (type === "right") {
-        setPanelWidth(w => { localStorage.setItem(PANEL_STORAGE_KEY, String(w)); return w; });
-      } else {
-        setLeftPanelWidth(w => { localStorage.setItem(LEFT_PANEL_STORAGE_KEY, String(w)); return w; });
-      }
-    };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-    return () => {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-      cancelAnimationFrame(rafId.current);
-    };
-  }, []);
-
-  const { panelCols, btnScale, headerScale, leftPanelScale } = useMemo(() => {
-    let cols: number;
-    if (panelWidth < 210) cols = 1;
-    else if (panelWidth < 300) cols = 2;
-    else if (panelWidth < 550) cols = 3;
-    else if (panelWidth < 700) cols = 4;
-    else cols = 5;
-    const btnW = panelWidth / cols;
-    const bs = Math.min(1.45, Math.max(0.75, btnW / 87));
-    const hs = Math.min(1.25, Math.max(0.85, 1 + (bs - 1) * 0.35));
-    const lps = Math.min(1.3, Math.max(0.85, 1 + (leftPanelWidth / 240 - 1) * 0.4));
-    return { panelCols: cols, btnScale: bs, headerScale: hs, leftPanelScale: lps };
-  }, [panelWidth, leftPanelWidth]);
-
-  const currentAssignedClient = assignedClients[activeClient];
 
   return (
-    <>
     <div className="h-screen flex bg-register-bg overflow-hidden select-none">
-      {/* LOCK OVERLAY */}
-      <AnimatePresence>
-        {isLocked && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-primary/95 flex items-center justify-center">
-            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="bg-card p-6 w-[300px] border border-register-border">
-              <div className="flex items-center gap-2 mb-4">
-                <Lock className="h-5 w-5 text-primary" />
-                <h2 className="text-sm font-bold text-foreground">{t("dialog.lock.title")}</h2>
-              </div>
-              <p className="text-[11px] text-muted-foreground mb-3">{t("dialog.lock.message")}</p>
-              <input type="password" value={lockPassword} onChange={(e) => setLockPassword(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleUnlock()} placeholder={t("dialog.lock.password")} className="w-full px-3 py-2 text-sm border border-input bg-background text-foreground outline-none mb-3" autoFocus />
-              <button onClick={handleUnlock} className="w-full py-2 bg-primary text-primary-foreground text-[11px] font-bold uppercase hover:bg-primary/90 transition-colors">{t("dialog.lock.unlock")}</button>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <LockOverlay
+        isLocked={isLocked}
+        lockPassword={lockPassword}
+        setLockPassword={setLockPassword}
+        handleUnlock={handleUnlock}
+        t={t}
+      />
 
-      {/* QUANTITY DIALOG */}
-      <AnimatePresence>
-        {quantityDialog && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-40 bg-black/40 flex items-center justify-center">
-            <motion.div initial={{ scale: 0.9, y: 10 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 10 }} className="bg-card p-5 w-[280px] border border-register-border">
-              <h3 className="text-sm font-bold text-foreground mb-3">{t("dialog.quantity.title")}</h3>
-              <input type="number" min="1" value={quantityValue} onChange={(e) => setQuantityValue(e.target.value)} onKeyDown={(e) => e.key === "Enter" && confirmQuantity()} placeholder={t("dialog.quantity.placeholder")} className="w-full px-3 py-2 text-sm border border-input bg-background text-foreground outline-none mb-3" autoFocus />
-              <div className="flex gap-2">
-                <button onClick={() => setQuantityDialog(false)} className="flex-1 py-2 bg-muted text-foreground text-[10px] font-bold uppercase">{t("dialog.cancel")}</button>
-                <button onClick={confirmQuantity} className="flex-1 py-2 bg-primary text-primary-foreground text-[10px] font-bold uppercase">{t("dialog.confirm")}</button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <QuantityDialog
+        isOpen={quantityDialog}
+        value={quantityValue}
+        onChange={setQuantityValue}
+        onConfirm={confirmQuantity}
+        onClose={() => setQuantityDialog(false)}
+        t={t}
+      />
 
-      {/* DISCOUNT DIALOG */}
-      <AnimatePresence>
-        {discountDialog && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-40 bg-black/40 flex items-center justify-center">
-            <motion.div initial={{ scale: 0.9, y: 10 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 10 }} className="bg-card p-5 w-[280px] border border-register-border">
-              <h3 className="text-sm font-bold text-foreground mb-3">{t("dialog.discount.title")}</h3>
-              <input type="number" min="0" max="100" value={discountValue} onChange={(e) => setDiscountValue(e.target.value)} onKeyDown={(e) => e.key === "Enter" && confirmDiscount()} placeholder={t("dialog.discount.placeholder")} className="w-full px-3 py-2 text-sm border border-input bg-background text-foreground outline-none mb-3" autoFocus />
-              <div className="flex gap-2">
-                <button onClick={() => setDiscountDialog(false)} className="flex-1 py-2 bg-muted text-foreground text-[10px] font-bold uppercase">{t("dialog.cancel")}</button>
-                <button onClick={confirmDiscount} className="flex-1 py-2 bg-primary text-primary-foreground text-[10px] font-bold uppercase">{t("dialog.confirm")}</button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <DiscountDialog
+        isOpen={discountDialog}
+        value={discountValue}
+        type={discountType}
+        isItemScoped={!!selectedItemId}
+        onChange={setDiscountValue}
+        onTypeChange={setDiscountType}
+        onConfirm={confirmDiscount}
+        onClose={() => setDiscountDialog(false)}
+        t={t}
+      />
 
-      {/* PAYMENT DIALOG — now with Credit option */}
-      <AnimatePresence>
-        {paymentDialog && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-40 bg-black/40 flex items-center justify-center">
-            <motion.div initial={{ scale: 0.9, y: 10 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 10 }} className="bg-card p-5 w-[380px] border border-register-border">
-              <h3 className="text-sm font-bold text-foreground mb-1">{t("dialog.payment.title")}</h3>
-              <p className="text-[11px] text-muted-foreground mb-1">{t("dialog.payment.total")}: <span className="font-bold text-foreground">{totalTTC.toFixed(2)} DA</span></p>
-              {currentAssignedClient && (
-                <p className="text-[10px] text-primary mb-3 flex items-center gap-1">
-                  <User className="h-3 w-3" /> {currentAssignedClient.name}
-                </p>
-              )}
-              <div className="flex gap-2 mb-2">
-                <button onClick={() => processPayment("cash")} className="flex-1 flex flex-col items-center gap-1 py-4 bg-emerald-500 text-white hover:brightness-110 transition-all active:scale-95 rounded">
-                  <Banknote className="h-6 w-6" />
-                  <span className="text-[10px] font-bold uppercase">{t("dialog.payment.cash")}</span>
-                </button>
-                <button onClick={() => processPayment("card")} className="flex-1 flex flex-col items-center gap-1 py-4 bg-blue-500 text-white hover:brightness-110 transition-all active:scale-95 rounded">
-                  <CreditCard className="h-6 w-6" />
-                  <span className="text-[10px] font-bold uppercase">{t("dialog.payment.card")}</span>
-                </button>
-                <button onClick={() => processPayment("credit")} className="flex-1 flex flex-col items-center gap-1 py-4 bg-amber-500 text-white hover:brightness-110 transition-all active:scale-95 rounded">
-                  <Wallet className="h-6 w-6" />
-                  <span className="text-[10px] font-bold uppercase">Crédit</span>
-                </button>
-              </div>
-              <button onClick={() => setPaymentDialog(false)} className="w-full py-2 bg-muted text-foreground text-[10px] font-bold uppercase">{t("dialog.cancel")}</button>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <SalesHistoryDialog
+        open={salesHistoryOpen}
+        onClose={() => setSalesHistoryOpen(false)}
+        sales={sales}
+        refundSale={refundSale}
+        refundItems={refundItems}
+      />
 
-      {/* CASH ADD/REMOVE DIALOG */}
-      <AnimatePresence>
-        {cashDialog && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-40 bg-black/40 flex items-center justify-center">
-            <motion.div initial={{ scale: 0.9, y: 10 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 10 }} className="bg-card p-5 w-[320px] border border-register-border">
-              <h3 className="text-sm font-bold text-foreground mb-1">
-                {cashDialog === "add" ? t("dialog.cash.addTitle") : t("dialog.cash.removeTitle")}
-              </h3>
-              <p className="text-[11px] text-muted-foreground mb-3">
-                {t("label.cashBalance")}: <span className="font-bold text-foreground">{cashBalance.toFixed(2)} DA</span>
-              </p>
-              <input type="number" min="0" step="0.01" value={cashAmount} onChange={(e) => setCashAmount(e.target.value)} placeholder={t("dialog.cash.amount")} className="w-full px-3 py-2 text-sm border border-input bg-background text-foreground outline-none mb-2" autoFocus />
-              <input type="text" value={cashNote} onChange={(e) => setCashNote(e.target.value)} onKeyDown={(e) => e.key === "Enter" && confirmCash()} placeholder={t("dialog.cash.note")} className="w-full px-3 py-2 text-sm border border-input bg-background text-foreground outline-none mb-3" />
-              <div className="flex gap-2">
-                <button onClick={() => { setCashDialog(null); setCashAmount(""); setCashNote(""); }} className="flex-1 py-2 bg-muted text-foreground text-[10px] font-bold uppercase">{t("dialog.cancel")}</button>
-                <button onClick={confirmCash} className={`flex-1 py-2 text-[10px] font-bold uppercase ${cashDialog === "add" ? "bg-success text-success-foreground" : "bg-accent text-accent-foreground"}`}>{t("dialog.confirm")}</button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+
+      <PrixLibreDialog
+        isOpen={prixLibreDialog}
+        value={prixLibreValue}
+        onChange={setPrixLibreValue}
+        onConfirm={confirmPrixLibre}
+        onClose={() => setPrixLibreDialog(false)}
+        t={t}
+      />
+
+      <PaymentDialog
+        isOpen={paymentDialog}
+        totalTTC={totalTTC}
+        onPay={processPayment}
+        onClose={() => setPaymentDialog(false)}
+        t={t}
+        hasAssignedClient={!!assignedClients[activeClient]}
+      />
+
+      <CashMovementDialog
+        type={cashDialog}
+        cashBalance={cashBalance}
+        amount={cashAmount}
+        note={cashNote}
+        onAmountChange={setCashAmount}
+        onNoteChange={setCashNote}
+        onConfirm={confirmCash}
+        onClose={() => {
+          setCashDialog(null);
+          setCashAmount("");
+          setCashNote("");
+        }}
+        t={t}
+      />
+
+      <TreasuryHub
+        open={treasuryOpen}
+        onClose={() => setTreasuryOpen(false)}
+        userId={activeUser.id}
+        userName={activeUser.name}
+      />
+
+      <CartsManager
+        open={cartsManagerOpen}
+        onClose={() => setCartsManagerOpen(false)}
+        clientCarts={Object.fromEntries(Object.entries(clientStates).map(([k, v]: any) => [k, v.items]))}
+        onMoveItems={performMoveItems}
+        onSplitItem={performSplitItem}
+        onMergeCarts={performMergeCarts}
+        activeClient={activeClient}
+        assignedClients={assignedClients}
+      />
+
+      <ClientAssociation 
+        open={clientAssocOpen}
+        onClose={() => setClientAssocOpen(false)}
+        onAssign={(client) => {
+          setAssignedClients((prev: any) => ({ ...prev, [activeClient]: client }));
+          setClientAssocOpen(false);
+        }}
+        currentClient={assignedClients[activeClient]}
+      />
+
+      <LabelPreview
+        open={labelPreviewOpen}
+        onClose={() => setLabelPreviewOpen(false)}
+        product={cart.find((i: any) => i.id === selectedItemId)}
+      />
+
 
       {/* LEFT PANEL */}
       <div
@@ -767,7 +239,9 @@ const Register = () => {
           className="flex flex-col items-center border-b border-register-border bg-slate-50/50 flex-shrink-0 relative overflow-hidden"
           style={{ paddingTop: Math.round(18 * leftPanelScale), paddingBottom: Math.round(18 * leftPanelScale) }}
         >
+          {/* Subtle background glow */}
           <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/5 blur-3xl rounded-full -translate-y-1/2 translate-x-1/2" />
+
           <motion.div
             className="flex flex-col items-center leading-none"
             initial={{ scale: 0.8, opacity: 0 }}
@@ -843,8 +317,14 @@ const Register = () => {
         </div>
 
         <ScrollArea className="flex-1 bg-background border-b border-register-border pr-2.5">
-          {shortcuts.map((s, i) => (
-            <button key={i} onClick={() => handleShortcutClick(s.productId)} className="flex items-center gap-2 w-full px-3 py-2 border-b border-register-border hover:bg-muted/60 transition-colors text-left active:scale-[0.98]">
+          <div className="flex justify-between items-center px-4 pt-1 mb-2">
+            <span className="text-[12px] font-bold text-muted-foreground uppercase">{t("label.discount")}:</span>
+            <span className={`text-[12px] font-black font-digital ${discount.value > 0 ? "text-primary" : "text-foreground"}`}>
+              {discount.value > 0 ? (discount.type === "percent" ? `${discount.value}%` : `${discount.value.toFixed(2)} DA`) : "0.00"}
+            </span>
+          </div>
+          {shortcutsData.map((s, i) => (
+            <button key={i} onClick={() => handleShortcutClick(s.productId)} className="flex items-center gap-2 w-full px-3 py-2 border-b border-register-border hover:bg-muted/60 transition-colors text-left active:scale-[0.98] focus:outline-none focus:ring-0 focus-visible:outline-none outline-none ring-0">
               <span className={`w-3 h-3 rounded-full ${s.color} shrink-0`} />
               <span className="text-[11px] font-medium text-foreground truncate">{s.name}</span>
             </button>
@@ -852,11 +332,11 @@ const Register = () => {
         </ScrollArea>
 
         <div className="border-t border-register-border flex flex-shrink-0 overflow-hidden">
-          <button onClick={() => navigate("/settings", { state: { from: "/register" } })} className="flex items-center gap-2 justify-center flex-1 px-1 py-2 text-[11px] font-medium text-muted-foreground hover:bg-muted transition-colors border-r border-register-border min-w-0">
+          <button onClick={() => navigate("/settings", { state: { from: "/register" } })} className="flex items-center gap-2 justify-center flex-1 px-1 py-2 text-[11px] font-medium text-muted-foreground hover:bg-muted transition-colors border-r border-register-border min-w-0 focus:outline-none focus:ring-0 focus-visible:outline-none outline-none ring-0">
             <Settings className="h-3.5 w-3.5 flex-shrink-0" />
             <span className="truncate">{t("label.settings")}</span>
           </button>
-          <button onClick={() => { if (!isOpenMode()) logout(); navigate("/"); }} className="flex items-center gap-2 justify-center flex-1 px-1 py-2 text-[11px] font-medium text-accent hover:bg-muted transition-colors min-w-0">
+          <button onClick={() => { if (!isOpenMode()) logout(); navigate("/"); }} className="flex items-center gap-2 justify-center flex-1 px-1 py-2 text-[11px] font-medium text-accent hover:bg-muted transition-colors min-w-0 focus:outline-none focus:ring-0 focus-visible:outline-none outline-none ring-0">
             <LogOut className="h-3.5 w-3.5 flex-shrink-0" />
             <span className="truncate">{t("label.back")}</span>
           </button>
@@ -876,7 +356,28 @@ const Register = () => {
       </div>
 
       {/* CENTER PANEL */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden relative">
+        <AnimatePresence>
+          {(multiplierDisplay.pending !== "" || multiplierDisplay.locked !== null) && (
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0, y: -20, x: "-50%" }}
+              animate={{ scale: 1, opacity: 1, y: 0, x: "-50%" }}
+              exit={{ scale: 0.8, opacity: 0, y: -20, x: "-50%" }}
+              className="absolute top-6 left-1/2 z-50 bg-primary text-primary-foreground px-6 py-2 rounded-full shadow-2xl border-4 border-background flex items-center gap-3 drop-shadow-xl"
+            >
+              <Hash className="w-5 h-5 opacity-50" />
+              <div className="flex flex-col items-center">
+                <span className="text-[10px] uppercase font-bold tracking-widest opacity-70">
+                  {multiplierDisplay.locked !== null ? "Multiplicateur" : "Quantité"}
+                </span>
+                <span className="text-3xl font-black font-digital tracking-tighter leading-none">
+                  {multiplierDisplay.locked !== null ? multiplierDisplay.locked : multiplierDisplay.pending}<span className="text-xl ml-1 text-primary-foreground/50 text-shadow-none">x</span>
+                </span>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         <div className="bg-card border-b border-register-border px-4 py-8 flex items-center justify-center">
           <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.4 }} className="text-center">
             <motion.span key={totalTTC} initial={{ scale: 1.05, opacity: 0.7 }} animate={{ scale: 1, opacity: 1 }} className="text-8xl font-black text-primary tracking-tighter font-digital">
@@ -888,9 +389,9 @@ const Register = () => {
 
         <div className="grid grid-cols-4 gap-0 border-b border-register-border">
           {[
-            { label: t("label.totalHT"), value: `${total.toFixed(2)} DA` },
-            { label: t("label.totalTVA"), value: `${(total * 0).toFixed(2)} DA` },
-            { label: t("label.discount"), value: discount > 0 ? `-${discountAmount.toFixed(2)} DA (${discount}%)` : "0,00 DA" },
+            { label: t("label.totalHT"), value: `${subtotal.toFixed(2)} DA` },
+            { label: t("label.totalTVA"), value: `${(subtotal * 0).toFixed(2)} DA` },
+            { label: t("label.discount"), value: discount.value > 0 ? `-${discountAmount.toFixed(2)} DA (${discount.type === "percent" ? discount.value + "%" : "Fixe"})` : "0,00 DA" },
             { label: t("label.totalTTC"), value: `${totalTTC.toFixed(2)} DA` },
           ].map((s, i) => (
             <div key={i} className={`text-center py-1.5 px-2 ${i < 3 ? "border-r border-register-border" : ""}`}>
@@ -907,94 +408,58 @@ const Register = () => {
           {[1, 2, 3, 4, 5, 6].map((n) => (
             <button
               key={n}
-              onClick={() => { setActiveClient(n); setSelectedItemId(null); }}
-              className={`flex-1 text-[10px] font-bold uppercase transition-all border-r border-register-border last:border-r-0 relative ${activeClient === n ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted/80"
+              onClick={() => setActiveClient(n)}
+              className={`flex-1 text-[10px] font-bold uppercase transition-all border-r border-register-border last:border-r-0 relative outline-none ring-0 focus:ring-0 focus:outline-none focus-visible:ring-0 ${activeClient === n ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted/80"
                 }`}
             >
-              {t("label.client")}{n}
-              {assignedClients[n] && (
-                <span className="ml-0.5 text-[8px] opacity-80">({assignedClients[n]!.name.split(" ")[0]})</span>
-              )}
-              {(clientCarts[n]?.length || 0) > 0 && activeClient !== n && (
+              {assignedClients[n]?.name || `${t("label.client")}${n}`}
+              {(clientStates[n]?.items?.length || 0) > 0 && activeClient !== n && (
                 <span className="absolute top-0.5 right-1 w-1.5 h-1.5 rounded-full bg-accent" />
               )}
             </button>
           ))}
         </motion.div>
 
-        <RegisterSearchBar isOpen={searchOpen} onClose={() => setSearchOpen(false)} onSelectProduct={(p) => addProductToCart(p)} t={t} />
+        <RegisterSearchBar
+          isOpen={searchOpen}
+          onClose={() => { setSearchOpen(false); setSearchInitialQuery(""); }}
+          onSelectProduct={(p) => addProductToCart(p)}
+          t={t}
+          initialQuery={searchInitialQuery}
+          products={allProducts}
+        />
 
         {/* Items Table */}
-        <ScrollArea className="flex-1 bg-background relative pr-2.5">
-          <table className="w-full text-sm">
-            <thead className="sticky top-0 z-10">
+        {/* We push the vertical scrollbar down by 38px so it clears the 2px orange border of the sticky header perfectly */}
+        <ScrollArea scrollHideDelay={1500} ref={cartScrollRef} type="scroll" className="flex-1 bg-background relative [&_[data-orientation=vertical]]:mt-[38px]">
+          <table className="w-full text-sm" style={{ tableLayout: 'fixed' }}>
+            <thead className="sticky top-0 z-10 w-full">
               <tr className="bg-muted border-b-2 border-primary">
-                <th className="px-3 py-2 text-left text-[10px] font-bold text-foreground uppercase tracking-wider">{t("label.product")}</th>
-                <th className="px-3 py-2 text-center text-[10px] font-bold text-foreground uppercase tracking-wider">{t("label.qty")}</th>
-                <th className="px-3 py-2 text-right text-[10px] font-bold text-foreground uppercase tracking-wider">{t("label.unitPrice")}</th>
-                <th className="px-3 py-2 text-right text-[10px] font-bold text-foreground uppercase tracking-wider">{t("label.total")}</th>
+                <th className="px-3 py-2 text-left text-[10px] font-bold text-foreground uppercase tracking-wider w-[45%]">{t("label.product")}</th>
+                <th className="px-3 py-2 text-center text-[10px] font-bold text-foreground uppercase tracking-wider w-[15%]">{t("label.qty")}</th>
+                <th className="px-3 py-2 text-right text-[10px] font-bold text-foreground uppercase tracking-wider w-[20%]">{t("label.unitPrice")}</th>
+                <th className="pl-3 pr-[18px] py-2 text-right text-[10px] font-bold text-foreground uppercase tracking-wider w-[20%]">{t("label.total")}</th>
               </tr>
             </thead>
             <tbody>
-              <AnimatePresence>
-                {cart.map((item, i) => {
-                  const lineTotal = item.quantity * item.price;
-                  const isReturn = item.isReturn;
-
-                  return (
-                    <motion.tr
-                      key={item.id}
-                      data-item-id={item.id}
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: 10, height: 0 }}
-                      transition={{ duration: 0.2, delay: i * 0.03 }}
-                      onClick={() => setSelectedItemId(item.id === selectedItemId ? null : item.id)}
-                      className={`cursor-pointer transition-colors border-b border-register-border ${
-                        isReturn
-                          ? "bg-red-50 border-l-2 border-l-red-400"
-                          : item.id === selectedItemId
-                            ? "bg-primary/10 border-l-2 border-l-primary"
-                            : i % 2 === 0
-                              ? "bg-card hover:bg-muted/40"
-                              : "bg-muted/20 hover:bg-muted/40"
-                      }`}
-                      style={isReturn ? {
-                        backgroundImage: "repeating-linear-gradient(135deg, transparent, transparent 10px, rgba(239,68,68,0.04) 10px, rgba(239,68,68,0.04) 20px)"
-                      } : undefined}
-                    >
-                      <td className="px-3 py-2.5 text-[12px] font-medium text-foreground">
-                        <div className="flex items-center gap-2">
-                          <motion.div animate={{ scale: item.id === selectedItemId ? 1.15 : 1 }} className={`w-1.5 h-1.5 rounded-full shrink-0 ${isReturn ? "bg-red-500" : item.id === selectedItemId ? "bg-primary" : "bg-muted-foreground/30"}`} />
-                          <span className={isReturn ? "line-through text-red-600" : ""}>{item.name}</span>
-                          {isReturn && (
-                            <span className="text-[8px] px-1.5 py-0.5 bg-red-500 text-white font-black uppercase rounded-sm">
-                              RETOUR
-                            </span>
-                          )}
-                          {item.price === 0 && !isReturn && <span className="text-[8px] px-1 py-0.5 bg-success text-success-foreground font-bold uppercase">{t("action.gift")}</span>}
-                        </div>
-                      </td>
-                      <td className="px-3 py-2.5 text-center text-[12px]">
-                        <div className="flex flex-col items-center gap-0.5">
-                          <button onClick={(e) => { e.stopPropagation(); setSelectedItemId(item.id); setTimeout(() => setQuantityDialog(true), 0); }} className={`inline-block min-w-[28px] px-1 py-0.5 font-bold font-digital hover:bg-primary hover:text-primary-foreground transition-all cursor-pointer rounded-sm active:scale-95 shadow-sm ${isReturn ? "bg-red-100 text-red-700" : "bg-muted text-foreground"}`}>
-                            {isReturn ? `-${item.quantity}` : item.quantity}
-                          </button>
-                          {item.packSize && item.packSize > 1 && (
-                            <span className="text-[9px] font-black text-primary/70 bg-primary/5 px-1 rounded border border-primary/10">
-                              x{item.packSize}
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td className={`px-3 py-2.5 text-right text-[14px] font-digital ${isReturn ? "text-red-500" : "text-muted-foreground"}`}>{item.price.toFixed(2)} DA</td>
-                      <td className={`px-3 py-2.5 text-right font-bold text-[14px] font-digital ${isReturn ? "text-red-600" : "text-foreground"}`}>
-                        {isReturn ? `-${lineTotal.toFixed(2)}` : lineTotal.toFixed(2)} DA
-                      </td>
-                    </motion.tr>
-                  );
-                })}
-              </AnimatePresence>
+              {cart.map((item, i) => (
+                <CartItemRow
+                  key={item.id}
+                  item={item}
+                  index={i}
+                  isSelected={item.id === selectedItemId}
+                  isShaking={item.id === shakingItemId}
+                  onSelect={(id) => setSelectedItemId(id === selectedItemId ? null : id)}
+                  onOpenQuantityDialog={(id) => {
+                    const item = cart.find(i => i.id === id);
+                    setSelectedItemId(id);
+                    setQuantityValue(item ? item.quantity.toString() : "1");
+                    setTimeout(() => setQuantityDialog(true), 0);
+                  }}
+                  t={t}
+                  rowRef={selectedRowRef}
+                />
+              ))}
             </tbody>
           </table>
           {cart.length === 0 && (
@@ -1007,11 +472,6 @@ const Register = () => {
         {/* Bottom bar */}
         <div className="px-3 py-1.5 border-t border-register-border bg-muted flex items-center justify-between text-[11px] text-muted-foreground">
           <span>{cart.length} {t("label.articles")}</span>
-          {currentAssignedClient && (
-            <span className="flex items-center gap-1 text-primary font-bold">
-              <User className="h-3 w-3" /> {currentAssignedClient.name}
-            </span>
-          )}
           <span>{t("label.totalQty")}: {cart.reduce((s, i) => s + i.quantity, 0)}</span>
           <span>{t("label.cashBalance")}: {cashBalance.toFixed(2)} DA</span>
         </div>
@@ -1029,13 +489,15 @@ const Register = () => {
         />
       </div>
 
-      {/* RIGHT PANEL */}
+      {/* RIGHT PANEL — resizable hotkey buttons */}
       <div
         className="flex flex-col border-l border-register-border bg-card overflow-hidden flex-shrink-0"
         style={{ width: panelWidth }}
       >
         <div className="flex flex-col bg-white border-b border-register-border flex-shrink-0 items-center justify-center relative overflow-hidden" style={{ padding: Math.round(12 * headerScale) }}>
+          {/* Subtle background glow */}
           <div className="absolute top-0 left-0 w-24 h-24 bg-orange-500/5 blur-3xl rounded-full -translate-y-1/2 -translate-x-1/2" />
+
           <div className="flex flex-col items-center mb-2">
             <div
               className="rounded-full border-2 border-primary flex items-center justify-center text-primary mb-1 bg-white shadow-sm"
@@ -1075,122 +537,18 @@ const Register = () => {
           </div>
         </div>
 
-        <ScrollArea className="flex-1 p-1.5 pr-2.5">
-          {(() => {
-            const rows: typeof visibleButtons[] = [];
-            for (let i = 0; i < visibleButtons.length; i += panelCols) {
-              rows.push(visibleButtons.slice(i, i + panelCols));
-            }
-            return rows.map((row, rowIdx) => {
-              const isFull = row.length === panelCols;
-              const totalGapWidth = (panelCols - 1) * 4;
-              const btnWidth = Math.floor((panelWidth - 12 - totalGapWidth) / panelCols);
-
-              return (
-                <div
-                  key={rowIdx}
-                  className="flex gap-1 mb-1"
-                  style={{ justifyContent: isFull ? "stretch" : "center" }}
-                >
-                  {row.map((btn) => {
-                    const shortcut = userHotkeys[btn.key] || "";
-                    const theme = getActionTheme(btn.key);
-                    const iconSize = Math.round(16 * btnScale);
-                    const labelSize = Math.round(7.5 * btnScale);
-                    const badgeSize = Math.round(8 * btnScale);
-                    const btnHeight = Math.round(85 * Math.min(btnScale, 1.25));
-
-                    return (
-                      <button
-                        key={btn.key}
-                        onClick={() => actions[btn.key]?.()}
-                        className="flex flex-col bg-white border border-gray-100
-                          transition-all duration-75 active:scale-95 overflow-hidden flex-shrink-0 relative group shadow-sm hover:shadow-md"
-                        style={{ height: btnHeight, width: btnWidth }}
-                      >
-                        <div className="absolute top-0 right-0 w-5 h-5 overflow-hidden">
-                          <div className={`absolute top-0 right-0 w-7 h-7 ${theme.bg} rotate-45 transform origin-bottom-left translate-x-[40%] -translate-y-[40%] shadow-sm`} />
-                        </div>
-
-                        <div className="flex flex-col items-center justify-center flex-1 w-full px-1 py-1">
-                          <div
-                            className={`rounded-full border flex items-center justify-center mb-1.5 transition-transform group-hover:scale-110 ${theme.text} ${theme.border}`}
-                            style={{
-                              padding: Math.round(5 * btnScale),
-                              borderWidth: Math.max(1, Math.round(1 * btnScale)),
-                            }}
-                          >
-                            <btn.icon style={{ width: iconSize, height: iconSize }} />
-                          </div>
-                          <span
-                            className="font-black uppercase leading-none text-center text-slate-700"
-                            style={{
-                              fontSize: labelSize,
-                              display: "-webkit-box",
-                              WebkitLineClamp: 2,
-                              WebkitBoxOrient: "vertical",
-                              overflow: "hidden",
-                              lineHeight: "1.1",
-                            }}
-                          >
-                            {t(btn.key)}
-                          </span>
-                        </div>
-
-                        <div className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded-sm bg-gray-50/80 backdrop-blur-sm border border-gray-100 flex items-center justify-center opacity-70 group-hover:opacity-100 transition-opacity">
-                          <span className="font-black text-slate-500" style={{ fontSize: badgeSize * 0.9 }}>
-                            {shortcut || "—"}
-                          </span>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              );
-            });
-          })()}
-        </ScrollArea>
+        {/* Button grid — reflows instantly as panelWidth changes */}
+        <ActionButtonGrid
+          visibleButtons={visibleButtons}
+          panelCols={panelCols}
+          panelWidth={panelWidth}
+          btnScale={btnScale}
+          actions={fullActions}
+          hotkeys={userHotkeys}
+          t={t}
+        />
       </div>
     </div>
-
-    {/* All overlay dialogs */}
-    <SalesHistoryDialog open={salesHistoryOpen} onClose={() => setSalesHistoryOpen(false)} />
-    <TreasuryHub
-      open={treasuryOpen}
-      onClose={() => setTreasuryOpen(false)}
-      defaultTab={treasuryTab}
-      userId={activeUser.id}
-      userName={activeUser.name}
-    />
-    <CartsManager
-      open={cartsManagerOpen}
-      onClose={() => setCartsManagerOpen(false)}
-      clientCarts={clientCarts}
-      setClientCarts={setClientCarts}
-      activeClient={activeClient}
-    />
-    <ClientAssociation
-      open={clientAssocOpen}
-      onClose={() => setClientAssocOpen(false)}
-      currentClient={currentAssignedClient || null}
-      onAssign={(client) => setAssignedClients((prev) => ({ ...prev, [activeClient]: client }))}
-    />
-    <LabelPreview
-      open={labelPreviewOpen}
-      onClose={() => setLabelPreviewOpen(false)}
-      product={selectedItem ? { name: selectedItem.name, price: selectedItem.price, barcode: selectedItem.barcode } : null}
-    />
-    <PackCyclePopover
-      open={packCycleOpen}
-      onClose={() => setPackCycleOpen(false)}
-      variants={selectedVariants}
-      currentIndex={selectedItem?.packVariantIndex ?? -1}
-      unitName={selectedBaseName}
-      unitPrice={selectedItem?.originalPrice || selectedItem?.price || 0}
-      onSelect={handlePackSelect}
-      anchorRect={packCycleAnchor}
-    />
-    </>
   );
 };
 

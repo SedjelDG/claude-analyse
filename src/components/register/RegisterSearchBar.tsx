@@ -3,38 +3,40 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Search, Barcode, X, CornerDownLeft } from "lucide-react";
 
 import { generateMockProducts } from "@/utils/mockProducts";
-import type { Product } from "@/utils/mockProducts";
+import type { Product } from "@/types/product";
 
 const mockProducts: Product[] = generateMockProducts(20000);
 
 interface RegisterSearchBarProps {
   isOpen: boolean;
   onClose: () => void;
-  onSelectProduct: (product: Product) => void;
+  onSelectProduct: (product: any) => void;
   t: (key: string) => string;
+  initialQuery?: string;
+  products: Product[];
 }
 
-const RegisterSearchBar = ({ isOpen, onClose, onSelectProduct, t }: RegisterSearchBarProps) => {
+const RegisterSearchBar = ({ isOpen, onClose, onSelectProduct, t, initialQuery, products }: RegisterSearchBarProps) => {
   const [query, setQuery] = useState("");
   const [mode, setMode] = useState<"name" | "barcode">("name");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const results = query.length > 0
-    ? mockProducts.filter((p) =>
-        mode === "name"
-          ? p.name.toLowerCase().includes(query.toLowerCase())
-          : (p.barcode || "").includes(query)
-      ).slice(0, 8)
+    ? products.filter((p) =>
+      mode === "name"
+        ? p.name.toLowerCase().includes(query.toLowerCase())
+        : (p.barcode || "").includes(query)
+    ).slice(0, 8)
     : [];
 
   useEffect(() => {
     if (isOpen) {
-      setQuery("");
+      setQuery(initialQuery || "");
       setSelectedIndex(0);
       setTimeout(() => inputRef.current?.focus(), 100);
     }
-  }, [isOpen]);
+  }, [isOpen, initialQuery]);
 
   useEffect(() => {
     setSelectedIndex(0);
@@ -121,11 +123,10 @@ const RegisterSearchBar = ({ isOpen, onClose, onSelectProduct, t }: RegisterSear
                       setQuery("");
                       onClose();
                     }}
-                    className={`w-full flex items-center justify-between px-3 py-2 text-left transition-colors border-b border-register-border last:border-b-0 ${
-                      i === selectedIndex
+                    className={`w-full flex items-center justify-between px-3 py-2 text-left transition-colors border-b border-register-border last:border-b-0 ${i === selectedIndex
                         ? "bg-primary text-primary-foreground"
                         : "hover:bg-muted/60 text-foreground"
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center gap-2">
                       <CornerDownLeft className={`h-3 w-3 ${i === selectedIndex ? "text-primary-foreground/70" : "text-muted-foreground"}`} />

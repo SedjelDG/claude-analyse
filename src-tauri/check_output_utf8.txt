@@ -1,0 +1,248 @@
+﻿cargo :     Checking serde_core v1.0.228
+At line:1 char:82
++ ... Playground\codex take\src-tauri"; cargo check > 
+check_output.txt 2>&1
++                                       
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (    Checking ser 
+   de_core v1.0.228:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+    Checking zerovec v0.11.6
+    Checking zerotrie v0.2.4
+    Checking memchr v2.8.0
+    Checking windows-core v0.61.2
+    Checking windows-sys v0.61.2
+    Checking icu_properties_data v2.2.0
+    Checking once_cell v1.21.4
+    Checking zmij v1.0.21
+    Checking percent-encoding v2.3.2
+    Checking windows-numerics v0.2.0
+    Checking windows-future v0.2.1
+    Checking windows-collections v0.2.0
+    Checking aho-corasick v1.1.4
+    Checking tinystr v0.8.3
+    Checking potential_utf v0.1.5
+    Checking form_urlencoded v1.2.2
+    Checking windows v0.61.3
+    Checking icu_collections v2.2.0
+    Checking alloc-no-stdlib v2.0.4
+    Checking icu_locale_core v2.2.0
+    Checking bytes v1.11.1
+    Checking unic-char-range v0.9.0
+    Checking unic-common v0.9.0
+    Checking raw-window-handle v0.6.2
+    Checking powerfmt v0.2.0
+    Checking regex-syntax v0.8.10
+    Checking unic-ucd-version v0.9.0
+    Checking deranged v0.5.8
+    Checking unic-char-property v0.9.0
+    Checking serde v1.0.228
+    Checking serde_json v1.0.149
+    Checking uuid v1.23.0
+    Checking icu_provider v2.2.0
+    Checking winapi-util v0.1.11
+    Checking bitflags v2.11.0
+    Checking dpi v0.1.2
+    Checking alloc-stdlib v0.2.2
+    Checking typeid v1.0.3
+    Checking icu_properties v2.2.0
+    Checking icu_normalizer v2.2.0
+    Checking thiserror v2.0.18
+    Checking winnow v1.0.1
+    Checking siphasher v1.0.2
+    Checking fnv v1.0.7
+    Checking byteorder v1.5.0
+    Checking time-core v0.1.8
+    Checking num-conv v0.2.1
+    Checking phf_shared v0.11.3
+    Checking toml_parser v1.1.2+spec-1.1.0
+    Checking jsonptr v0.6.3
+    Checking cfb v0.7.3
+    Checking time v0.3.47
+    Checking erased-serde v0.4.10
+    Checking brotli-decompressor v5.0.0
+    Checking regex-automata v0.4.14
+    Checking same-file v1.0.6
+    Checking unic-ucd-ident v0.9.0
+    Checking toml_datetime v0.7.5+spec-1.1.0
+    Checking serde_spanned v1.1.1
+    Checking idna_adapter v1.2.1
+    Checking idna v1.1.0
+    Checking crossbeam-utils v0.8.21
+    Checking http v1.4.0
+    Checking thiserror v1.0.69
+    Checking windows-version v0.1.7
+    Checking url v2.5.8
+    Checking scopeguard v1.2.0
+    Checking winnow v0.7.15
+    Checking pin-project-lite v0.2.17
+    Checking log v0.4.29
+    Checking unicode-segmentation v1.13.2
+    Checking toml_writer v1.1.1+spec-1.1.0
+    Checking dunce v1.0.5
+    Checking crossbeam-channel v0.5.15
+    Checking lock_api v0.4.14
+    Checking brotli v8.0.2
+    Checking cookie v0.18.1
+    Checking json-patch v3.0.1
+    Checking serde-untagged v0.1.9
+    Checking infer v0.19.0
+    Checking walkdir v2.5.0
+    Checking windows_x86_64_msvc v0.53.1
+    Checking phf v0.11.3
+    Checking serde_with v3.18.0
+    Checking parking_lot_core v0.9.12
+    Checking anyhow v1.0.102
+    Checking regex v1.12.3
+    Checking windows_x86_64_msvc v0.52.6
+    Checking zerocopy v0.8.48
+    Checking semver v1.0.28
+    Checking tracing-core v0.1.36
+    Checking toml v0.9.12+spec-1.1.0
+    Checking glob v0.3.3
+    Checking urlpattern v0.3.0
+    Checking windows-targets v0.52.6
+    Checking tracing v0.1.44
+    Checking parking_lot v0.12.5
+    Checking windows-targets v0.53.5
+    Checking libc v0.2.184
+    Checking option-ext v0.2.0
+    Checking windows-sys v0.60.2
+    Checking dirs-sys v0.5.0
+    Checking softbuffer v0.4.8
+    Checking windows-sys v0.59.0
+    Checking keyboard-types v0.7.0
+    Checking serialize-to-javascript v0.1.2
+    Checking libsqlite3-sys v0.28.0
+    Checking dirs v6.0.0
+    Checking getrandom v0.3.4
+    Checking tokio v1.51.1
+    Checking heck v0.5.0
+    Checking mime v0.3.17
+    Checking tauri-utils v2.8.3
+    Checking window-vibrancy v0.6.0
+    Checking fallible-iterator v0.3.0
+    Checking fallible-streaming-iterator v0.1.9
+   Compiling ds-software v0.1.0 
+(C:\Users\Administrator\Documents\Playground\codex 
+take\src-tauri)
+    Checking ahash v0.8.12
+    Checking hashbrown v0.14.5
+    Checking hashlink v0.9.1
+    Checking muda v0.17.2
+    Checking rusqlite v0.31.0
+    Checking webview2-com-sys v0.38.2
+    Checking tao v0.34.8
+    Checking webview2-com v0.38.2
+    Checking wry v0.54.4
+    Checking tauri-runtime v2.10.1
+    Checking tauri-runtime-wry v2.10.1
+    Checking tauri v2.10.3
+warning: unused import: `OptionalExtension`
+ --> src\db.rs:1:36
+  |
+1 | use rusqlite::{params, Connection, OptionalExtension};
+  |                                    ^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of 
+`#[warn(unused)]`) on by default
+
+warning: unused import: `Manager`
+ --> src\db.rs:4:31
+  |
+4 | use tauri::{AppHandle, State, Manager};
+  |                               ^^^^^^^
+
+error[E0599]: no method named `emit` found for struct 
+`AppHandle<R>` in the current scope
+   --> src\db.rs:239:17
+    |
+239 |     let _ = app.emit("inventory-update", ());
+    |                 ^^^^
+    |
+   ::: C:\Users\Administrator\.cargo\registry\src\index.crates
+.io-1949cf8c6b5b557f\tauri-2.10.3\src\lib.rs:952:6
+    |
+952 |   fn emit<S: Serialize + Clone>(&self, event: &str, 
+payload: S) -> Result<()> {
+    |      ---- the method is available for `AppHandle` here
+    |
+    = help: items from traits can only be used if the trait 
+is in scope
+help: there is a method `exit` with a similar name, but with 
+different arguments
+   --> C:\Users\Administrator\.cargo\registry\src\index.crates
+.io-1949cf8c6b5b557f\tauri-2.10.3\src\app.rs:532:3
+    |
+532 |   pub fn exit(&self, exit_code: i32) {
+    |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: trait `Emitter` which provides `emit` is implemented 
+but not in scope; perhaps you want to import it
+    |
+  1 + use tauri::Emitter;
+    |
+
+error[E0599]: no method named `emit` found for struct 
+`AppHandle<R>` in the current scope
+   --> src\db.rs:252:17
+    |
+252 |     let _ = app.emit("inventory-update", ());
+    |                 ^^^^
+    |
+   ::: C:\Users\Administrator\.cargo\registry\src\index.crates
+.io-1949cf8c6b5b557f\tauri-2.10.3\src\lib.rs:952:6
+    |
+952 |   fn emit<S: Serialize + Clone>(&self, event: &str, 
+payload: S) -> Result<()> {
+    |      ---- the method is available for `AppHandle` here
+    |
+    = help: items from traits can only be used if the trait 
+is in scope
+help: there is a method `exit` with a similar name, but with 
+different arguments
+   --> C:\Users\Administrator\.cargo\registry\src\index.crates
+.io-1949cf8c6b5b557f\tauri-2.10.3\src\app.rs:532:3
+    |
+532 |   pub fn exit(&self, exit_code: i32) {
+    |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: trait `Emitter` which provides `emit` is implemented 
+but not in scope; perhaps you want to import it
+    |
+  1 + use tauri::Emitter;
+    |
+
+error[E0599]: no method named `emit` found for struct 
+`AppHandle<R>` in the current scope
+   --> src\db.rs:356:17
+    |
+356 |     let _ = app.emit("inventory-update", ());
+    |                 ^^^^
+    |
+   ::: C:\Users\Administrator\.cargo\registry\src\index.crates
+.io-1949cf8c6b5b557f\tauri-2.10.3\src\lib.rs:952:6
+    |
+952 |   fn emit<S: Serialize + Clone>(&self, event: &str, 
+payload: S) -> Result<()> {
+    |      ---- the method is available for `AppHandle` here
+    |
+    = help: items from traits can only be used if the trait 
+is in scope
+help: there is a method `exit` with a similar name, but with 
+different arguments
+   --> C:\Users\Administrator\.cargo\registry\src\index.crates
+.io-1949cf8c6b5b557f\tauri-2.10.3\src\app.rs:532:3
+    |
+532 |   pub fn exit(&self, exit_code: i32) {
+    |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: trait `Emitter` which provides `emit` is implemented 
+but not in scope; perhaps you want to import it
+    |
+  1 + use tauri::Emitter;
+    |
+
+For more information about this error, try `rustc --explain 
+E0599`.
+warning: `ds-software` (lib) generated 2 warnings
+error: could not compile `ds-software` (lib) due to 3 
+previous errors; 2 warnings emitted

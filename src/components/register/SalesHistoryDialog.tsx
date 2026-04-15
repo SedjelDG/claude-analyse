@@ -4,16 +4,18 @@ import {
   X, Calendar, Clock, Search, Printer, RotateCcw, ChevronDown, ChevronUp,
   CreditCard, Banknote, CheckSquare, Square, Filter, Receipt
 } from "lucide-react";
-import { useSalesHistory, Sale } from "@/hooks/useSalesHistory";
+import { Sale } from "@/hooks/useSalesHistory";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface Props {
   open: boolean;
   onClose: () => void;
+  sales: Sale[];
+  refundSale: (id: string) => void;
+  refundItems: (id: string, itemIds: string[]) => void;
 }
 
-const SalesHistoryDialog = ({ open, onClose }: Props) => {
-  const { sales, refundSale, refundItems } = useSalesHistory();
+const SalesHistoryDialog = ({ open, onClose, sales, refundSale, refundItems }: Props) => {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -84,11 +86,11 @@ const SalesHistoryDialog = ({ open, onClose }: Props) => {
       h2{text-align:center;margin:0 0 4px}p{margin:2px 0;font-size:11px;text-align:center}</style></head>
       <body><h2>DS Software</h2><p>Ticket #${sale.id.slice(-6)}</p>
       <p>${new Date(sale.timestamp).toLocaleString("fr-FR")}</p>
-      <p>Caissier: ${sale.cashierName} | Client N°${sale.clientNumber}</p><hr/>
+      <p>Caissier: ${sale.cashierName} | ${sale.clientName ? `Client: ${sale.clientName}` : `Client N°${sale.clientNumber}`}</p><hr/>
       <table><thead><tr><th>Article</th><th style="text-align:center">Qté</th><th style="text-align:right">Total</th></tr></thead>
       <tbody>${itemsHtml}</tbody></table><br/>
       <table><tr class="total"><td>TOTAL</td><td style="text-align:right">${sale.total.toFixed(2)} DA</td></tr>
-      ${sale.discount > 0 ? `<tr><td>Remise</td><td style="text-align:right">${sale.discount}%</td></tr>` : ""}
+      ${sale.discount > 0 ? `<tr><td>Remise</td><td style="text-align:right">${sale.discountType === 'percent' ? sale.discount + '%' : sale.discount.toFixed(2) + ' DA'}</td></tr>` : ""}
       <tr><td>Paiement</td><td style="text-align:right">${sale.paymentMethod === "cash" ? "Espèces" : "Carte"}</td></tr></table>
       <p style="margin-top:16px">Merci pour votre visite!</p>
       <script>window.print();setTimeout(()=>window.close(),1000)</script></body></html>`);
@@ -194,9 +196,8 @@ const SalesHistoryDialog = ({ open, onClose }: Props) => {
                     <div key={sale.id} className={`${refunded ? "opacity-50" : ""}`}>
                       {/* Sale row */}
                       <div
-                        className={`flex items-center gap-4 px-5 py-3 cursor-pointer transition-colors ${
-                          isExpanded ? "bg-primary/5" : "hover:bg-muted/50"
-                        }`}
+                        className={`flex items-center gap-4 px-5 py-3 cursor-pointer transition-colors ${isExpanded ? "bg-primary/5" : "hover:bg-muted/50"
+                          }`}
                         onClick={() => setExpandedSaleId(isExpanded ? null : sale.id)}
                       >
                         <div className="flex items-center gap-2 min-w-[140px]">
@@ -206,7 +207,7 @@ const SalesHistoryDialog = ({ open, onClose }: Props) => {
                           <div>
                             <p className="text-xs font-bold text-foreground">#{sale.id.slice(-6)}</p>
                             <p className="text-[10px] text-muted-foreground">
-                              Client N°{sale.clientNumber}
+                              {sale.clientName || `Client N°${sale.clientNumber}`}
                             </p>
                           </div>
                         </div>
@@ -224,7 +225,7 @@ const SalesHistoryDialog = ({ open, onClose }: Props) => {
 
                         <div className="flex-1 text-xs text-muted-foreground truncate">
                           {sale.items.length} article(s) • {sale.cashierName}
-                          {sale.discount > 0 && <span className="ml-1 text-accent font-bold">-{sale.discount}%</span>}
+                          {sale.discount > 0 && <span className="ml-1 text-accent font-bold">-{sale.discountType === 'percent' ? `${sale.discount}%` : `${sale.discount} DA`}</span>}
                         </div>
 
                         <div className="flex items-center gap-3">
@@ -295,7 +296,7 @@ const SalesHistoryDialog = ({ open, onClose }: Props) => {
                               <div className="flex items-center justify-between mt-3 pt-2 border-t border-register-border">
                                 <div className="flex items-center gap-4 text-xs text-muted-foreground">
                                   <span>Sous-total: {sale.subtotal.toFixed(2)} DA</span>
-                                  {sale.discount > 0 && <span className="text-accent">Remise: -{sale.discount}%</span>}
+                                  {sale.discount > 0 && <span className="text-accent">Remise: -{sale.discountType === 'percent' ? `${sale.discount}%` : `${sale.discount} DA`}</span>}
                                   <span className="font-bold text-foreground">Total: {sale.total.toFixed(2)} DA</span>
                                 </div>
                               </div>

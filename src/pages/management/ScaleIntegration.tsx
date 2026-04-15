@@ -1,36 +1,33 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Scale, Search, Upload, Download, Tag, Check, AlertCircle, LayoutGrid } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import ScaleButtonLayout from "@/components/management/ScaleButtonLayout";
-
-interface ScaleProduct {
-  id: string;
-  plu: string;
-  name: string;
-  price: number;
-  unit: string;
-  tare: number;
-  labelFormat: string;
-  synced: boolean;
-  active: boolean;
-}
-
-const mockScaleProducts: ScaleProduct[] = [
-  { id: "1", plu: "001", name: "Pommes", price: 250, unit: "kg", tare: 0, labelFormat: "Standard", synced: true, active: true },
-  { id: "2", plu: "002", name: "Bananes", price: 350, unit: "kg", tare: 0, labelFormat: "Standard", synced: true, active: true },
-  { id: "3", plu: "003", name: "Fromage", price: 800, unit: "kg", tare: 0.02, labelFormat: "Standard", synced: false, active: true },
-  { id: "4", plu: "004", name: "Olives", price: 500, unit: "kg", tare: 0.05, labelFormat: "Standard", synced: true, active: true },
-  { id: "5", plu: "005", name: "Viande hachée", price: 1200, unit: "kg", tare: 0.03, labelFormat: "Avec date", synced: false, active: false },
-  { id: "6", plu: "006", name: "Poulet", price: 450, unit: "kg", tare: 0.02, labelFormat: "Avec date", synced: true, active: true },
-];
+import { useInventory } from "@/hooks/useInventory";
+import { useToast } from "@/hooks/use-toast";
+import { getTauriInvoke } from "@/lib/desktop-runtime";
 
 const ScaleIntegration = () => {
   const [search, setSearch] = useState("");
-  const [products, setProducts] = useState(mockScaleProducts);
+  const { products: allProducts, saveProduct } = useInventory();
   const [showLayout, setShowLayout] = useState(false);
+  const { toast } = useToast();
+  const [pendingSyncIds, setPendingSyncIds] = useState<Set<string>>(new Set());
+
+  const scaleProducts = useMemo(() => allProducts.filter(p => p.scaleEnabled), [allProducts]);
+  const products = useMemo(() => scaleProducts.map(p => ({
+    id: p.id,
+    plu: p.plu,
+    name: p.name,
+    price: p.price,
+    unit: p.unit,
+    tare: p.tareWeight || 0,
+    labelFormat: p.labelFormat,
+    active: p.isActive,
+    synced: !pendingSyncIds.has(p.id) && !!p.plu,
+  })), [scaleProducts, pendingSyncIds]);
 
   const filtered = products.filter(
     (p) => p.name.toLowerCase().includes(search.toLowerCase()) || p.plu.includes(search)
@@ -40,14 +37,30 @@ const ScaleIntegration = () => {
   const activeCount = products.filter((p) => p.active).length;
   const unsyncedCount = products.filter((p) => !p.synced && p.active).length;
 
-  const toggleActive = (id: string) => {
-    setProducts((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, active: !p.active, synced: false } : p))
-    );
+  const toggleActive = async (id: string) => {
+    const p = allProducts.find((op) => op.id === id);
+    if (p) {
+      await saveProduct({ ...p, isActive: !p.isActive });
+      setPendingSyncIds(prev => new Set(prev).add(id));
+      toast({ title: "Produit mis à jour", description: !p.isActive ? "Activé pour la balance" : "Désactivé de la balance" });
+    }
   };
 
-  const syncAll = () => {
-    setProducts((prev) => prev.map((p) => (p.active ? { ...p, synced: true } : p)));
+  const syncAll = async () => {
+    try {
+      await getTauriInvoke()("sync_scale_plu", { products: scaleProducts }).catch(() => {});
+      setPendingSyncIds(new Set());
+      toast({
+        title: "Synchronisation réussie",
+        description: "Les informations ont été envoyées à la balance.",
+      });
+    } catch {
+      toast({
+        title: "Erreur de synchronisation",
+        description: "Impossible de communiquer avec la balance.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -79,10 +92,20 @@ const ScaleIntegration = () => {
         </div>
       </div>
 
-      {/* Scale Button Layout Overlay */}
       <AnimatePresence>
         {showLayout && (
-          <ScaleButtonLayout products={products} onUpdateProducts={setProducts} />
+          <ScaleButtonLayout 
+            products={products} 
+            onUpdateProducts={async (updated) => {
+              for (const p of updated) {
+                const original = allProducts.find(op => op.id === p.id);
+                if (original && original.plu !== p.plu) {
+                  await saveProduct({ ...original, plu: p.plu });
+                  setPendingSyncIds(prev => new Set(prev).add(p.id));
+                }
+              }
+            }} 
+          />
         )}
       </AnimatePresence>
 

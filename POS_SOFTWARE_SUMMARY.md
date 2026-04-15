@@ -199,7 +199,7 @@ Required settings:
 - Hardware connection settings for:
 - Thermal or dot printer
 - Barcode scanner via USB, serial, or bluetooth
-- Electronic scale via serial or TCP
+- Digital scale via serial or TCP
 - Brand and port configuration where relevant
 - Test-connection style behavior for configured hardware
 

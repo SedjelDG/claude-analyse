@@ -1,5 +1,9 @@
 import "@testing-library/jest-dom";
 
+beforeEach(() => {
+  window.localStorage.clear();
+});
+
 Object.defineProperty(window, "matchMedia", {
   writable: true,
   value: (query: string) => ({
@@ -12,4 +16,20 @@ Object.defineProperty(window, "matchMedia", {
     removeEventListener: () => {},
     dispatchEvent: () => {},
   }),
+});
+
+class ResizeObserverMock {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+
+Object.defineProperty(window, "ResizeObserver", {
+  writable: true,
+  value: ResizeObserverMock,
+});
+
+Object.defineProperty(window.HTMLElement.prototype, "scrollIntoView", {
+  writable: true,
+  value: () => {},
 });

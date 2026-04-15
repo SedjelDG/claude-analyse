@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, ArrowRight, Scissors, Merge, ShoppingCart } from "lucide-react";
+import { X, Scissors, Merge, ShoppingCart, GripVertical } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { toast } from "@/hooks/use-toast";
 
 interface CartItem {
   id: string;
@@ -20,16 +21,29 @@ interface CartsManagerProps {
   open: boolean;
   onClose: () => void;
   clientCarts: Record<number, CartItem[]>;
-  setClientCarts: React.Dispatch<React.SetStateAction<Record<number, CartItem[]>>>;
+  onMoveItems: (sourceCart: number, targetCart: number, itemIds: string[]) => void;
+  onSplitItem: (sourceCart: number, targetCart: number, itemId: string, quantity: number) => void;
+  onMergeCarts: (sourceCart: number, targetCart: number) => void;
   activeClient: number;
+  assignedClients: Record<number, any>;
 }
 
 const CART_COLORS = [
   "bg-blue-500", "bg-emerald-500", "bg-amber-500", "bg-purple-500", "bg-pink-500", "bg-cyan-500",
 ];
 
-const CartsManager = ({ open, onClose, clientCarts, setClientCarts, activeClient }: CartsManagerProps) => {
+const CartsManager = ({ 
+  open, 
+  onClose, 
+  clientCarts, 
+  onMoveItems, 
+  onSplitItem, 
+  onMergeCarts, 
+  activeClient,
+  assignedClients
+}: CartsManagerProps) => {
   const [selectedItems, setSelectedItems] = useState<Map<number, Set<string>>>(new Map());
+  const [draggedItem, setDraggedItem] = useState<{ cartIdx: number; itemId: string } | null>(null);
   const [splitDialog, setSplitDialog] = useState<{ cartIdx: number; itemId: string; maxQty: number } | null>(null);
   const [splitQty, setSplitQty] = useState("");
   const [splitTarget, setSplitTarget] = useState<number | null>(null);
@@ -48,77 +62,18 @@ const CartsManager = ({ open, onClose, clientCarts, setClientCarts, activeClient
     });
   };
 
-  const transferTo = (targetCart: number) => {
-    setClientCarts((prev) => {
-      const next = { ...prev };
-      selectedItems.forEach((itemIds, sourceCart) => {
-        if (sourceCart === targetCart) return;
-        const source = [...(next[sourceCart] || [])];
-        const target = [...(next[targetCart] || [])];
-        itemIds.forEach((id) => {
-          const idx = source.findIndex((i) => i.id === id);
-          if (idx !== -1) {
-            const [item] = source.splice(idx, 1);
-            // Merge if same item exists in target
-            const existing = target.find((t) => t.name === item.name && t.price === item.price && !t.isReturn);
-            if (existing) {
-              existing.quantity += item.quantity;
-            } else {
-              target.push({ ...item, id: `${item.id}-t${Date.now()}` });
-            }
-          }
-        });
-        next[sourceCart] = source;
-        next[targetCart] = target;
-      });
-      return next;
+  const handleTransfer = (targetCart: number) => {
+    selectedItems.forEach((itemIds, sourceCart) => {
+      if (sourceCart === targetCart) return;
+      onMoveItems(sourceCart, targetCart, Array.from(itemIds));
     });
     setSelectedItems(new Map());
+    toast({ title: "Transfert réussi", description: "Les articles ont été déplacés." });
   };
 
-  const confirmSplit = () => {
-    if (!splitDialog || !splitTarget) return;
-    const qty = parseInt(splitQty);
-    if (isNaN(qty) || qty <= 0 || qty >= splitDialog.maxQty) return;
-
-    setClientCarts((prev) => {
-      const next = { ...prev };
-      const source = [...(next[splitDialog.cartIdx] || [])];
-      const target = [...(next[splitTarget] || [])];
-      const itemIdx = source.findIndex((i) => i.id === splitDialog.itemId);
-      if (itemIdx !== -1) {
-        const item = { ...source[itemIdx] };
-        item.quantity -= qty;
-        source[itemIdx] = item;
-        target.push({ ...item, id: `split-${Date.now()}`, quantity: qty });
-      }
-      next[splitDialog.cartIdx] = source;
-      next[splitTarget] = target;
-      return next;
-    });
-    setSplitDialog(null);
-    setSplitQty("");
-    setSplitTarget(null);
-  };
-
-  const mergeAll = (sourceCart: number, targetCart: number) => {
-    if (sourceCart === targetCart) return;
-    setClientCarts((prev) => {
-      const next = { ...prev };
-      const items = [...(next[sourceCart] || [])];
-      const target = [...(next[targetCart] || [])];
-      items.forEach((item) => {
-        const existing = target.find((t) => t.name === item.name && t.price === item.price && !t.isReturn);
-        if (existing) {
-          existing.quantity += item.quantity;
-        } else {
-          target.push({ ...item, id: `merge-${Date.now()}-${Math.random().toString(36).slice(2, 6)}` });
-        }
-      });
-      next[sourceCart] = [];
-      next[targetCart] = target;
-      return next;
-    });
+  const handleMerge = (sourceCart: number, targetCart: number) => {
+    onMergeCarts(sourceCart, targetCart);
+    toast({ title: "Fusion réussie", description: `Panier ${sourceCart} fusionné vers ${targetCart}.` });
   };
 
   const hasSelection = selectedItems.size > 0;
@@ -127,123 +82,203 @@ const CartsManager = ({ open, onClose, clientCarts, setClientCarts, activeClient
   return (
     <AnimatePresence>
       <motion.div
-        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
         onClick={onClose}
       >
         <motion.div
-          initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
+          initial={{ scale: 0.95, opacity: 0, y: 20 }}
+          animate={{ scale: 1, opacity: 1, y: 0 }}
+          exit={{ scale: 0.95, opacity: 0, y: 20 }}
           transition={{ type: "spring", damping: 25, stiffness: 350 }}
-          className="bg-card border border-border rounded-lg shadow-2xl w-[95vw] max-w-[1200px] max-h-[85vh] overflow-hidden flex flex-col"
+          className="bg-card/95 border border-register-border/50 rounded-2xl shadow-2xl w-full max-w-[1200px] max-h-[90vh] overflow-hidden flex flex-col glass"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-5 py-3 border-b border-border bg-muted/50">
-            <div className="flex items-center gap-2">
-              <ShoppingCart className="h-5 w-5 text-primary" />
-              <h2 className="text-base font-bold text-foreground">Gestionnaire de Paniers</h2>
+          <div className="flex items-center justify-between px-6 py-4 border-b border-register-border/50 bg-muted/30">
+            <div className="flex items-center gap-3">
+              <div className="bg-primary/10 p-2 rounded-xl">
+                <ShoppingCart className="h-6 w-6 text-primary" />
+              </div>
+              <div>
+                <h2 className="text-lg font-black text-foreground uppercase tracking-tight">Gestionnaire de Paniers</h2>
+                <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest leading-none">Vue d'ensemble Multi-Clients</p>
+              </div>
               {hasSelection && (
-                <span className="text-xs bg-primary text-primary-foreground px-2 py-0.5 rounded-full font-bold">
+                <motion.span 
+                  initial={{ scale: 0.8 }} animate={{ scale: 1 }}
+                  className="ml-4 text-[10px] bg-primary text-primary-foreground px-3 py-1 rounded-full font-black uppercase tracking-widest shadow-lg shadow-primary/20"
+                >
                   {totalSelected} sélectionné(s)
-                </span>
+                </motion.span>
               )}
             </div>
-            <button onClick={onClose} className="p-1 rounded hover:bg-muted"><X className="h-4 w-4" /></button>
+            <button 
+              onClick={onClose} 
+              className="p-2 rounded-xl hover:bg-muted transition-colors group"
+            >
+              <X className="h-5 w-5 group-hover:rotate-90 transition-transform duration-300" />
+            </button>
           </div>
 
-          {/* Transfer bar */}
-          {hasSelection && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }}
-              className="px-5 py-2 border-b border-border bg-primary/5 flex items-center gap-2 flex-wrap"
-            >
-              <span className="text-xs font-bold text-foreground mr-2">Transférer vers :</span>
-              {[1, 2, 3, 4, 5, 6].map((n) => (
-                <button
-                  key={n}
-                  onClick={() => transferTo(n)}
-                  className={`px-3 py-1.5 text-xs font-bold rounded transition-all active:scale-95 ${
-                    CART_COLORS[n - 1]
-                  } text-white hover:brightness-110`}
-                >
-                  Client {n}
-                </button>
-              ))}
-            </motion.div>
-          )}
+          {/* Action Bar (When selection exists) */}
+          <AnimatePresence>
+            {hasSelection && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="px-6 py-3 border-b border-register-border/50 bg-primary/5 flex items-center gap-3 overflow-hidden"
+              >
+                <span className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Déplacer vers :</span>
+                <div className="flex gap-2">
+                  {[1, 2, 3, 4, 5, 6].map((n) => (
+                    <button
+                      key={n}
+                      onClick={() => handleTransfer(n)}
+                        className={`px-4 py-1.5 text-[10px] font-black uppercase rounded-lg transition-all active:scale-95 ${
+                          CART_COLORS[n - 1]
+                        } text-white shadow-lg shadow-black/5 hover:brightness-110`}
+                      >
+                        {assignedClients[n]?.name || `Client ${n}`}
+                      </button>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
-          {/* 6-column grid */}
+          {/* Main 6-Column Grid */}
           <div className="flex-1 overflow-hidden">
-            <div className="grid grid-cols-6 h-full divide-x divide-border">
+            <div className="grid grid-cols-6 h-full divide-x divide-register-border/30">
               {[1, 2, 3, 4, 5, 6].map((n) => {
                 const items = clientCarts[n] || [];
                 const total = items.reduce((s, i) => s + i.quantity * i.price * (i.isReturn ? -1 : 1), 0);
                 const isActive = n === activeClient;
 
                 return (
-                  <div key={n} className={`flex flex-col ${isActive ? "bg-primary/5" : ""}`}>
-                    {/* Column header */}
-                    <div className={`px-2 py-2 border-b border-border flex items-center justify-between ${CART_COLORS[n - 1]} bg-opacity-10`}>
-                      <div className="flex items-center gap-1.5">
-                        <div className={`w-2.5 h-2.5 rounded-full ${CART_COLORS[n - 1]}`} />
-                        <span className="text-[10px] font-black uppercase text-foreground">C{n}</span>
-                        {items.length > 0 && (
-                          <span className="text-[9px] bg-muted text-foreground px-1 rounded font-bold">{items.length}</span>
-                        )}
+                  <div 
+                    key={n} 
+                    className={`flex flex-col relative transition-colors ${isActive ? "bg-primary/[0.03]" : ""}`}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      if (draggedItem && draggedItem.cartIdx !== n) {
+                        // Highlight target column?
+                      }
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      if (draggedItem && draggedItem.cartIdx !== n) {
+                        onMoveItems(draggedItem.cartIdx, n, [draggedItem.itemId]);
+                        setDraggedItem(null);
+                        toast({ title: "Article déplacé", description: `Vers Client N°${n}` });
+                      }
+                    }}
+                  >
+                    {/* column header */}
+                    <div className={`px-3 py-3 border-b border-register-border/50 ${CART_COLORS[n - 1]} bg-opacity-5 flex items-center justify-between`}>
+                      <div className="flex items-center gap-2">
+                        <div className={`w-3 h-3 rounded-full ${CART_COLORS[n - 1]} shadow-lg shadow-black/10`} />
+                        <span className="text-xs font-black uppercase text-foreground">{assignedClients[n]?.name || `Client ${n}`}</span>
                       </div>
-                      <span className="text-[10px] font-bold text-foreground">{total.toFixed(0)}</span>
+                      <div className="text-right leading-none">
+                        <p className="text-[11px] font-black font-digital text-foreground">{total.toFixed(2)}</p>
+                        <p className="text-[8px] font-bold text-muted-foreground uppercase tracking-tighter">DA TOTAL</p>
+                      </div>
                     </div>
 
-                    {/* Items */}
-                    <ScrollArea className="flex-1 max-h-[50vh]">
-                      <div className="p-1 space-y-0.5">
-                        {items.map((item) => {
-                          const isSelected = selectedItems.get(n)?.has(item.id);
-                          return (
-                            <motion.div
-                              key={item.id}
-                              layout
-                              onClick={() => toggleItem(n, item.id)}
-                              className={`px-1.5 py-1 rounded text-[10px] cursor-pointer transition-all ${
-                                isSelected ? "bg-primary/20 ring-1 ring-primary" : "bg-muted/50 hover:bg-muted"
-                              } ${item.isReturn ? "line-through opacity-60" : ""}`}
-                            >
-                              <p className="font-medium text-foreground truncate">{item.name}</p>
-                              <div className="flex justify-between text-muted-foreground">
-                                <span>×{item.quantity}</span>
-                                <span>{(item.quantity * item.price).toFixed(0)}</span>
-                              </div>
-                            </motion.div>
-                          );
-                        })}
-                        {items.length === 0 && (
-                          <p className="text-center text-[10px] text-muted-foreground py-4">Vide</p>
+                    {/* item list */}
+                    <ScrollArea className="flex-1">
+                      <div className="p-2 space-y-1.5">
+                        {items.length > 0 ? (
+                          items.map((item) => {
+                            const isSelected = selectedItems.get(n)?.has(item.id);
+                            return (
+                              <motion.div
+                                key={item.id}
+                                layoutId={item.id}
+                                draggable
+                                onDragStart={() => setDraggedItem({ cartIdx: n, itemId: item.id })}
+                                onClick={() => toggleItem(n, item.id)}
+                                className={`group p-2 rounded-xl border transition-all cursor-move active:scale-95 ${
+                                  isSelected 
+                                    ? "bg-primary text-primary-foreground border-primary shadow-lg shadow-primary/20" 
+                                    : "bg-background border-register-border/50 hover:border-primary/50 hover:shadow-md"
+                                }`}
+                                initial={{ opacity: 0, y: 5 }}
+                                animate={{ opacity: 1, y: 0 }}
+                              >
+                                <div className="flex justify-between items-start gap-1">
+                                  <p className={`text-[10px] font-black uppercase leading-tight truncate ${isSelected ? "text-white" : "text-foreground"}`}>
+                                    {item.name}
+                                  </p>
+                                  <GripVertical className={`h-3 w-3 shrink-0 ${isSelected ? "text-white/50" : "text-muted-foreground/30 opacity-0 group-hover:opacity-100"}`} />
+                                </div>
+                                <div className={`flex justify-between items-end mt-1 ${isSelected ? "text-white/80" : "text-muted-foreground"}`}>
+                                  <span className="text-[9px] font-bold">×{item.quantity}</span>
+                                  <span className={`text-[10px] font-black font-digital ${isSelected ? "text-white" : "text-primary"}`}>
+                                    {(item.quantity * item.price).toFixed(2)}
+                                  </span>
+                                </div>
+                              </motion.div>
+                            );
+                          })
+                        ) : (
+                          <div className="flex flex-col items-center justify-center py-10 opacity-20 group">
+                            <ShoppingCart className="h-8 w-8 mb-2 group-hover:scale-110 transition-transform" />
+                            <p className="text-[9px] font-black uppercase tracking-widest">Panier Vide</p>
+                          </div>
                         )}
                       </div>
                     </ScrollArea>
 
-                    {/* Cart actions */}
+                    {/* Column footer actions */}
                     {items.length > 0 && (
-                      <div className="p-1 border-t border-border flex gap-0.5">
+                      <div className="p-2 border-t border-register-border/30 bg-muted/10 grid grid-cols-2 gap-1.5">
                         <button
                           onClick={() => {
-                            const itemIds = new Set(items.map((i) => i.id));
-                            setSelectedItems((prev) => {
-                              const next = new Map(prev);
-                              next.set(n, itemIds);
-                              return next;
-                            });
+                            // Select all in this cart
+                            const ids = new Set(items.map(i => i.id));
+                            setSelectedItems(prev => new Map(prev).set(n, ids));
                           }}
-                          className="flex-1 py-1 text-[8px] font-bold uppercase bg-muted text-foreground rounded hover:bg-muted/80 transition-colors"
+                          className="py-1.5 text-[9px] font-black uppercase bg-background border border-register-border/50 rounded-lg hover:bg-muted transition-colors"
                         >
                           Tout
                         </button>
+                        <div className="flex gap-1.5 min-w-0">
+                          <button
+                            title="Diviser cet article"
+                            onClick={(e) => { e.stopPropagation(); /* Split modal logic */ }}
+                            className="p-1.5 text-muted-foreground hover:text-primary transition-colors border border-register-border/50 rounded-lg bg-background"
+                          >
+                            <Scissors className="h-3 w-3" />
+                          </button>
+                          <button
+                            title="Fusionner vers un autre"
+                            onClick={(e) => { e.stopPropagation(); /* Toggle merge mode */ }}
+                            className="p-1.5 text-muted-foreground hover:text-orange-500 transition-colors border border-register-border/50 rounded-lg bg-background"
+                          >
+                            <Merge className="h-3 w-3" />
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
                 );
               })}
             </div>
+          </div>
+
+          {/* Footer info */}
+          <div className="px-6 py-3 border-t border-register-border/50 bg-muted/20 flex justify-between items-center text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+            <div className="flex items-center gap-4">
+              <span>6 Paniers Découplés</span>
+              <div className="h-3 w-[1px] bg-border" />
+              <span>DND Activé</span>
+            </div>
+            <span>Double-clic pour diviser · Glisser-déposer pour transférer</span>
           </div>
         </motion.div>
       </motion.div>

@@ -1,14 +1,12 @@
 import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from "react";
 import React from "react";
+import {
+  loadPersistedUserValue,
+  savePersistedUserValue,
+} from "@/services/user/persistence";
+import type { UserProfile, UserRole } from "@/types/user";
 
-export type UserRole = "manager" | "cashier";
-
-export interface UserProfile {
-  id: string;
-  name: string;
-  role: UserRole;
-  passkey: string;
-}
+export type { UserProfile, UserRole } from "@/types/user";
 
 const STORAGE_KEY = "ds-user-profiles";
 const CURRENT_USER_KEY = "ds-current-user";
@@ -54,6 +52,7 @@ const UserStoreContext = createContext<UserStoreContextValue | null>(null);
 
 export function UserStoreProvider({ children }: { children: ReactNode }) {
   const [profiles, setProfiles] = useState<UserProfile[]>(loadProfiles);
+  const [isHydratedFromNative, setIsHydratedFromNative] = useState(false);
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => {
     try {
       const stored = localStorage.getItem(CURRENT_USER_KEY);
@@ -68,16 +67,64 @@ export function UserStoreProvider({ children }: { children: ReactNode }) {
   });
 
   useEffect(() => {
-    saveProfiles(profiles);
-  }, [profiles]);
+    let cancelled = false;
+
+    const hydrateStore = async () => {
+      try {
+        const [nativeProfiles, nativeCurrentUser] = await Promise.all([
+          loadPersistedUserValue<UserProfile[]>(STORAGE_KEY),
+          loadPersistedUserValue<UserProfile | null>(CURRENT_USER_KEY),
+        ]);
+
+        if (cancelled) {
+          return;
+        }
+
+        if (nativeProfiles && nativeProfiles.length > 0) {
+          setProfiles(nativeProfiles);
+        }
+
+        if (nativeCurrentUser) {
+          setCurrentUser(nativeCurrentUser);
+        }
+      } catch {
+        // Local fallback remains in place.
+      } finally {
+        if (!cancelled) {
+          setIsHydratedFromNative(true);
+        }
+      }
+    };
+
+    void hydrateStore();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
+    if (!isHydratedFromNative) {
+      return;
+    }
+
+    saveProfiles(profiles);
+    void savePersistedUserValue(STORAGE_KEY, profiles);
+  }, [isHydratedFromNative, profiles]);
+
+  useEffect(() => {
+    if (!isHydratedFromNative) {
+      return;
+    }
+
     if (currentUser) {
       localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(currentUser));
+      void savePersistedUserValue(CURRENT_USER_KEY, currentUser);
     } else {
       localStorage.removeItem(CURRENT_USER_KEY);
+      void savePersistedUserValue(CURRENT_USER_KEY, null);
     }
-  }, [currentUser]);
+  }, [currentUser, isHydratedFromNative]);
 
   const login = useCallback(
     (passkey: string): UserProfile | null => {

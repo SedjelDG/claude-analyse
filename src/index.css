@@ -175,6 +175,11 @@
   .font-digital {
     font-family: var(--font-digital) !important;
   }
+
+  ::selection {
+    background-color: #FFD700 !important;
+    color: #1A1A1A !important;
+  }
 }
 
 @layer utilities {

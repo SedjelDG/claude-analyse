@@ -54,7 +54,7 @@ export const useHardware = ({ onScan }: HardwareEvents = {}) => {
     return true;
   }, []);
 
-  // Electronic Scale Simulator
+  // Scale Simulator
   const readScale = useCallback(async (): Promise<number> => {
     // Simulate COM port reading delay and fluctuation
     const weight = +(Math.random() * (5 - 0.1) + 0.1).toFixed(3); // 0.1kg to 5kg

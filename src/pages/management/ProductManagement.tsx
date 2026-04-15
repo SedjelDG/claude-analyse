@@ -19,10 +19,11 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import * as ScrollAreaPrimitive from "@radix-ui/react-scroll-area";
 import { ScrollBar } from "@/components/ui/scroll-area";
-import { generateMockProducts, Product, ExpirationEntry, PackVariant } from "@/utils/mockProducts";
+import { Product, ExpirationEntry, PackVariant } from "@/utils/mockProducts";
 import { ProductFormDialog, EditableProduct, emptyProduct } from "@/components/management/ProductFormDialog";
 import { ProductCreationWizard } from "@/components/management/ProductCreationWizard";
 import { ExportDialog, ImportDialog } from "@/components/management/ProductImportExport";
+import { useInventory } from "@/hooks/useInventory";
 
 const VirtualScrollArea = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>((props, ref) => (
   <ScrollAreaPrimitive.Root className="relative h-full w-full overflow-hidden radix-virtual-container">
@@ -102,8 +103,7 @@ const ProductManagement = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<PageTab>("products");
   const [search, setSearch] = useState("");
-  const [products, setProducts] = useState<Product[]>([]);
-  useEffect(() => { setProducts(generateMockProducts(20000)); }, []);
+  const { products, loading, saveProduct, removeProduct, bulkImport } = useInventory();
   const [showProductDialog, setShowProductDialog] = useState(false);
   const [showCreationWizard, setShowCreationWizard] = useState(false);
   const [showExportDialog, setShowExportDialog] = useState(false);
@@ -138,40 +138,41 @@ const ProductManagement = () => {
   const openNewProduct = () => { setShowCreationWizard(true); };
   const openEditProduct = (p: Product) => { setEditingProduct({ ...p }); setShowProductDialog(true); };
 
-  const deleteProduct = (id: string) => setProducts((prev) => prev.filter((p) => p.id !== id));
+  const deleteProduct = async (id: string) => {
+    await removeProduct(id);
+  };
 
   const navigateToPurchase = (productId: string) => {
     navigate(`/management/purchases?product=${productId}`);
   };
 
-  const handleSaveProduct = (updatedProduct: EditableProduct) => {
+  const handleSaveProduct = async (updatedProduct: EditableProduct) => {
     if (!updatedProduct.name) return;
     
     const cleanPackVariants = (updatedProduct.packVariants || []).filter(v => v.size > 1 && v.name && v.price > 0);
-    const finalProduct = { ...updatedProduct, packVariants: cleanPackVariants } as Product;
+    const finalProduct = { ...updatedProduct, packVariants: cleanPackVariants };
     
-    if (finalProduct.id) {
-      setProducts(prev => prev.map(p => p.id === finalProduct.id ? finalProduct : p));
-    } else {
-      const newProduct = { ...finalProduct, id: `prod-${Date.now()}` };
-      setProducts(prev => [newProduct, ...prev]);
+    if (!finalProduct.id) {
+      finalProduct.id = `prod-${Date.now()}`;
     }
+    
+    await saveProduct(finalProduct as Partial<Product>);
     setShowProductDialog(false);
   };
 
-  const handleWizardSave = (newProduct: EditableProduct) => {
+  const handleWizardSave = async (newProduct: EditableProduct) => {
     if (!newProduct.name) return;
     const cleanPackVariants = (newProduct.packVariants || []).filter(v => v.size > 1 && v.name && v.price > 0);
-    const product = { ...newProduct, packVariants: cleanPackVariants, id: `prod-${Date.now()}` } as Product;
-    setProducts(prev => [product, ...prev]);
+    const product = { ...newProduct, packVariants: cleanPackVariants, id: `prod-${Date.now()}` };
+    await saveProduct(product as Partial<Product>);
   };
 
-  const handleBulkImport = (imported: Partial<Product>[]) => {
+  const handleBulkImport = async (imported: Partial<Product>[]) => {
     const newProducts = imported.map((p, i) => ({
       ...p,
-      id: `prod-import-${Date.now()}-${i}`,
-    } as Product));
-    setProducts(prev => [...newProducts, ...prev]);
+      id: p.id || `prod-import-${Date.now()}-${i}`,
+    }));
+    await bulkImport(newProducts);
   };
 
   const statusColor = (s: string) =>
@@ -217,6 +218,13 @@ const ProductManagement = () => {
         </div>
         {activeTab === "products" && (
           <>
+            <Button variant="outline" onClick={async () => {
+              const { generateMockProducts } = await import("@/utils/mockProducts");
+              const mocks = generateMockProducts(100);
+              await bulkImport(mocks as any);
+            }} className="gap-1.5 text-primary">
+              <Plus className="h-4 w-4" /> Charger Mocks
+            </Button>
             <Button variant="outline" onClick={() => setShowImportDialog(true)} className="gap-1.5">
               <Upload className="h-4 w-4" /> Importer
             </Button>

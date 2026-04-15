@@ -1,4 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
+import {
+  loadPersistedSetting,
+  savePersistedSetting,
+} from "@/services/settings/persistence";
 
 export const DEFAULT_HOTKEYS: Record<string, string> = {
   "action.add": "F3",
@@ -20,6 +24,11 @@ export const DEFAULT_HOTKEYS: Record<string, string> = {
   "action.close": "Ctrl+X",
   "action.packCycle": "F8",
   "action.salesHistory": "F10",
+  "action.void": "F12",
+  "action.prixLibre": "Ctrl+P",
+  "action.printDraft": "Ctrl+I",
+  "action.printLabel": "Ctrl+B",
+  "action.mergeCarts": "Ctrl+M",
 };
 
 export interface AppSettings {
@@ -61,27 +70,66 @@ export const useSettings = (userId?: string) => {
     try {
       const stored = localStorage.getItem(getStorageKey(userId));
       if (stored) return { ...defaultSettings, ...JSON.parse(stored) };
-    } catch {}
+    } catch { }
     return defaultSettings;
   });
+  const [isHydratedFromNative, setIsHydratedFromNative] = useState(false);
 
   // Reload settings when userId changes
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(getStorageKey(userId));
-      if (stored) {
-        setSettings({ ...defaultSettings, ...JSON.parse(stored) });
-      } else {
-        setSettings(defaultSettings);
+    let cancelled = false;
+
+    const hydrateSettings = async () => {
+      const storageKey = getStorageKey(userId);
+
+      try {
+        const persistedSettings = await loadPersistedSetting<AppSettings>(storageKey);
+        if (cancelled) {
+          return;
+        }
+
+        if (persistedSettings) {
+          setSettings({ ...defaultSettings, ...persistedSettings });
+        } else {
+          try {
+            const stored = localStorage.getItem(storageKey);
+            if (stored) {
+              setSettings({ ...defaultSettings, ...JSON.parse(stored) });
+            } else {
+              setSettings(defaultSettings);
+            }
+          } catch {
+            setSettings(defaultSettings);
+          }
+        }
+      } catch {
+        if (!cancelled) {
+          setSettings(defaultSettings);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsHydratedFromNative(true);
+        }
       }
-    } catch {
-      setSettings(defaultSettings);
-    }
+    };
+
+    setIsHydratedFromNative(false);
+    void hydrateSettings();
+
+    return () => {
+      cancelled = true;
+    };
   }, [userId]);
 
   useEffect(() => {
-    localStorage.setItem(getStorageKey(userId), JSON.stringify(settings));
-  }, [settings, userId]);
+    if (!isHydratedFromNative) {
+      return;
+    }
+
+    const storageKey = getStorageKey(userId);
+    localStorage.setItem(storageKey, JSON.stringify(settings));
+    void savePersistedSetting(storageKey, settings);
+  }, [isHydratedFromNative, settings, userId]);
 
   useEffect(() => {
     const root = document.documentElement;
