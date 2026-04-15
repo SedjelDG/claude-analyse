@@ -19,7 +19,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import * as ScrollAreaPrimitive from "@radix-ui/react-scroll-area";
 import { ScrollBar } from "@/components/ui/scroll-area";
-import { Product, ExpirationEntry, PackVariant } from "@/utils/mockProducts";
+import { Product, ExpirationEntry, PackVariant } from "@/types/product";
 import { ProductFormDialog, EditableProduct, emptyProduct } from "@/components/management/ProductFormDialog";
 import { ProductCreationWizard } from "@/components/management/ProductCreationWizard";
 import { ExportDialog, ImportDialog } from "@/components/management/ProductImportExport";
@@ -218,13 +218,6 @@ const ProductManagement = () => {
         </div>
         {activeTab === "products" && (
           <>
-            <Button variant="outline" onClick={async () => {
-              const { generateMockProducts } = await import("@/utils/mockProducts");
-              const mocks = generateMockProducts(100);
-              await bulkImport(mocks as any);
-            }} className="gap-1.5 text-primary">
-              <Plus className="h-4 w-4" /> Charger Mocks
-            </Button>
             <Button variant="outline" onClick={() => setShowImportDialog(true)} className="gap-1.5">
               <Upload className="h-4 w-4" /> Importer
             </Button>

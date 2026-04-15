@@ -1,11 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, Barcode, X, CornerDownLeft } from "lucide-react";
-
-import { generateMockProducts } from "@/utils/mockProducts";
 import type { Product } from "@/types/product";
-
-const mockProducts: Product[] = generateMockProducts(20000);
 
 interface RegisterSearchBarProps {
   isOpen: boolean;

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { getTauriInvoke } from "@/lib/desktop-runtime";
-import { Product } from "@/utils/mockProducts";
+import { Product } from "@/types/product";
 import { useToast } from "@/hooks/use-toast";
 
 export const useInventory = () => {

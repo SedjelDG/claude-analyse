@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { EditableProduct, emptyProduct } from "@/components/management/ProductFormDialog";
-import { Product } from "@/utils/mockProducts";
+import { Product } from "@/types/product";
 
 type SaleMode = "standard" | "weighed" | "mixte";
 

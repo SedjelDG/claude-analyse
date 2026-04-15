@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Product } from "@/utils/mockProducts";
+import { Product } from "@/types/product";
 
 /* ─── Column definitions for export/import ─── */
 const PRODUCT_COLUMNS = [
